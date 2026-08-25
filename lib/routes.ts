@@ -1,0 +1,20 @@
+/** Every internal path in one place, so a rename is one edit. */
+export const routes = {
+  landing: '/',
+  login: '/login',
+  noAccess: '/no-access',
+  dashboard: '/dashboard',
+  aips: '/aip',
+  aip: (id: string) => `/aip/${id}` as const,
+  aipExport: (id: string) => `/api/aip/${id}/export` as const,
+  consolidated: '/consolidated',
+  consolidatedExport: (periodId: string) => `/api/periods/${periodId}/export` as const,
+  monitoring: '/monitoring',
+  monitoringPpa: (ppaId: string) => `/monitoring/${ppaId}` as const,
+  budget: '/budget',
+  settings: '/settings',
+  settingsSectors: '/settings/sectors',
+  settingsDepartments: '/settings/departments',
+  settingsPeriods: '/settings/periods',
+  settingsUsers: '/settings/users',
+} as const

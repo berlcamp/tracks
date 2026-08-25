@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env
+.env.local
+supabase/.env
+supabase/.branches
+supabase/.temp
+.DS_Store
+*.log
+.playwright-mcp/
+*.xlsx
+tsconfig.tsbuildinfo
+test-results/
+playwright-report/

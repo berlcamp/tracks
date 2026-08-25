@@ -1,0 +1,144 @@
+{
+  "columnWidths": {
+    "A": 12.71,
+    "B": 5.29,
+    "C": 37.43,
+    "D": 21.29,
+    "E": 11.29,
+    "F": 12.14,
+    "G": 47.71,
+    "H": 13.86,
+    "I": 17.57,
+    "J": 20.14,
+    "L": 17.57,
+    "O": 16.57,
+    "P": 15.86,
+    "Q": 14.43,
+    "R": 15.71,
+    "S": 14.43,
+    "T": 23.0,
+    "U": 23.71
+  },
+  "defaultColWidth": 14.43,
+  "fills": {
+    "departmentTotal": "FFD6E3BC",
+    "sectorBand": "FF76923C",
+    "sectorTotal": "FF76923C"
+  },
+  "headerMerges": [
+    "A8:A9",
+    "B8:C9",
+    "D8:D9",
+    "E8:F8",
+    "G8:G9",
+    "H8:H9",
+    "I8:M8",
+    "N8:O8",
+    "P8:P9",
+    "Q8:Q9"
+  ],
+  "headerRow10": {
+    "A10": "(1)",
+    "C10": "(2)",
+    "D10": "(3)",
+    "E10": "(4)",
+    "F10": "(5)",
+    "G10": "(6)",
+    "H10": "(7)",
+    "I10": "(8)",
+    "J10": "(9)",
+    "K10": "(10)",
+    "L10": "(11)",
+    "M10": "(12) 8+9+10+11",
+    "N10": "(13)",
+    "O10": "(14)",
+    "P10": "(15)",
+    "Q10": "(15)"
+  },
+  "headerRow8": {
+    "A8": "AIP Ref. Code",
+    "B8": "Program/ Project/ Activity Description",
+    "D8": "Implementing Office/ Department",
+    "E8": "Schedule of Implementation",
+    "G8": "Expected Outputs",
+    "H8": "Funding Source",
+    "I8": "AMOUNT (In Thousand Pesos)",
+    "N8": "AMOUNT of Climate Change expenditure (In Thousand Pesos)",
+    "P8": "CC Typology Code",
+    "Q8": "CC Typology Code"
+  },
+  "headerRow9": {
+    "E9": "Start Date",
+    "F9": "Completion Date",
+    "I9": "Personal Services (PS)",
+    "J9": "Maintenance and Other Operating Expenses (MOOE)",
+    "K9": "Financial Expenses (FE)",
+    "L9": "Capital Outlay (CO)",
+    "M9": "Total",
+    "N9": "Climate Change Adaptation",
+    "O9": "Climate Change Mitigation"
+  },
+  "hiddenColumns": [
+    "P"
+  ],
+  "moneyNumberFormat": "_-* #,##0.00_-;\\-* #,##0.00_-;_-* \"-\"??_-;_-@",
+  "rowHeights": {
+    "1": 16.5,
+    "10": 16.5,
+    "2": 16.5,
+    "3": 16.5,
+    "4": 16.5,
+    "5": 16.5,
+    "6": 16.5,
+    "7": 16.5,
+    "8": 32.25,
+    "9": 16.5
+  },
+  "sheet": "PUBLIC SERVICES Sector",
+  "source": "CY 2027 Annual Investment Program_Consolidated v3.xlsx",
+  "summary": {
+    "columnWidths": {
+      "A": 4.29,
+      "B": 10.71,
+      "C": 25.29,
+      "D": 17.71,
+      "E": 19.71,
+      "F": 18.14,
+      "G": 18.29,
+      "H": 18.57
+    },
+    "headerRow5": {
+      "B5": "CODE NUMBER",
+      "C5": "DEPARTMENT",
+      "D5": "AMOUNT (In Thousand Pesos)"
+    },
+    "headerRow6": {
+      "D6": "Personal Services (PS)",
+      "E6": "Maintenance and Other Operating Expenses (MOOE)",
+      "F6": "Financial Expenses (FE)",
+      "G6": "Capital Outlay (CO)",
+      "H6": "Total"
+    },
+    "merges": [
+      "B2:H2",
+      "B3:H3",
+      "B5:B6",
+      "C5:C6",
+      "D5:H5"
+    ],
+    "sectorFill": "FFEAF1DD"
+  },
+  "titleMerges": [
+    "A1:Q1",
+    "A2:Q2",
+    "A3:Q3"
+  ],
+  "titles": {
+    "A1": "ANNUAL INVESTMENT PROGRAM (AIP)",
+    "A2": "By Program/ Project/ Activity by Sector",
+    "A3": "CY 2027",
+    "A4": "City: Bayugan",
+    "A6": "No Climate Change Expenditure (Please tick the box if your LGU does not have any climate change expenditure)"
+  },
+  "totalRowMergeShape": "A:H"
+}

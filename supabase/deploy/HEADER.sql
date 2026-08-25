@@ -1,0 +1,22 @@
+-- ===========================================================================
+-- TRACKS — full schema bundle for the SHARED Supabase project.
+--
+-- GENERATED FILE. Do not edit. Rebuild with: npm run deploy:bundle
+-- Source: supabase/migrations/0001..0010, concatenated in order.
+--
+-- HOW TO APPLY
+--   1. Supabase Dashboard -> SQL Editor -> New query.
+--   2. Paste this whole file and Run. It is one transaction: if any statement
+--      fails, nothing is applied and the other apps on this project are
+--      untouched.
+--   3. Settings -> API -> Exposed schemas: add `tracks`. Without this,
+--      PostgREST returns 404 for every table and the app looks broken.
+--
+-- DO NOT run `supabase db push`, `db reset` or `db diff` against this project.
+-- They operate on the whole database and will propose dropping the objects
+-- belonging to the other apps that share it.
+--
+-- This bundle creates nothing in `public` and attaches nothing to auth.users.
+-- The only object it touches outside `tracks` is storage.objects, and every
+-- policy there is scoped `bucket_id = 'tracks-documents'`.
+-- ===========================================================================
