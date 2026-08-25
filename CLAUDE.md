@@ -121,6 +121,12 @@ type scale match.
 - Writes to `ppas` go through the RLS-bound client, not an RPC, so the submission
   lock rejects them in exactly the way psql does. Workflow transitions
   (submit/return/resolve/accept/reopen) go through the RPCs.
+- `components/aip/groups-dialog.tsx` edits column C as a tree, because that is
+  what it is: a PPA filed three levels down prints both ancestors above it, and a
+  heading's position is what orders the worksheet. Move targets that the database
+  would refuse — a heading's own subtree, a parent that would breach the depth
+  cap — are not offered. Deleting a heading keeps every PPA under it: the row
+  goes ungrouped, it does not go away.
 - Filtering the grid recomputes the subtotal rows over the visible rows and marks
   them "(filtered rows only)" — a subtotal that silently included hidden rows
   would be worse than no subtotal.
@@ -140,7 +146,7 @@ npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
 npm test             # 52 unit tests — exporter, template fidelity, grid layout
-npm run test:db      # 86 SQL tests against a throwaway Postgres.app database
+npm run test:db      # 99 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
 npm run test:e2e     # 25 Playwright tests against the local stack

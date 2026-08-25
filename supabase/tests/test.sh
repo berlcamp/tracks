@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export PATH="/Applications/Postgres.app/Contents/Versions/latest/bin:$PATH"
 
 "$ROOT/supabase/tests/run-local.sh" "$DB" >/dev/null
-for f in 01_assert 02_fixtures 03_access 04_workflow 05_money; do
+for f in 01_assert 02_fixtures 03_access 04_workflow 05_money 06_groups; do
   psql -q -d "$DB" -f "$ROOT/supabase/tests/$f.sql" 2>&1 \
     | grep -E '^psql.*ERROR' || true
 done

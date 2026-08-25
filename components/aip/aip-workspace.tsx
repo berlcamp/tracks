@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Download, Send, CheckCircle2, Undo2 } from 'lucide-react'
+import { Download, Send, CheckCircle2, Undo2, ListTree } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AipGrid } from './aip-grid'
 import { SubmissionSwitcher } from './submission-switcher'
 import { PpaDialog } from './ppa-dialog'
+import { GroupsDialog } from './groups-dialog'
 import { ReturnDialog } from './return-dialog'
 import { acceptAip, resolveReturn, submitAip } from '@/app/actions/aip'
 import {
@@ -38,6 +39,7 @@ export function AipWorkspace({
 }) {
   const [editing, setEditing] = useState<PpaRowView | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [groupsOpen, setGroupsOpen] = useState(false)
   const [returning, setReturning] = useState<PpaRowView | null>(null)
   const [returnOpen, setReturnOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -73,6 +75,12 @@ export function AipWorkspace({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {mayAdd ? (
+            <Button variant="outline" onClick={() => setGroupsOpen(true)}>
+              <ListTree className="size-4" /> Column-C headings
+            </Button>
+          ) : null}
+
           <Button variant="outline" asChild>
             <a href={routes.aipExport(aip.id)}>
               <Download className="size-4" /> Export to Excel
@@ -163,6 +171,13 @@ export function AipWorkspace({
         row={editing}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+      />
+      <GroupsDialog
+        aipId={aip.id}
+        groups={groups}
+        rows={rows}
+        open={groupsOpen}
+        onOpenChange={setGroupsOpen}
       />
       <ReturnDialog row={returning} open={returnOpen} onOpenChange={setReturnOpen} />
     </div>
