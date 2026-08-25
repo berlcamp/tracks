@@ -30,7 +30,11 @@ export function LoginForm({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
+        // `select_account`, not `consent`: nothing here touches a Google API, so
+        // there is no refresh token worth re-consenting for — but staff with a
+        // personal and a City account need the picker, or they sign in as the
+        // wrong one and land on /no-access with no idea why.
+        queryParams: { prompt: 'select_account' },
       },
     })
     if (oauthError) {
