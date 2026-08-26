@@ -129,10 +129,20 @@ export async function buildDepartmentExportData(
   return { data, filename: `CY${period.year}-AIP-${department?.code ?? 'Department'}${suffix}.xlsx` }
 }
 
-/** Worksheet order, matching tracks.v_ppa_rows' own ordering columns. */
+/**
+ * Worksheet order — the same three keys as sortWorksheet() in lib/data/aip.ts,
+ * because the screen and the printout are the same document.
+ *
+ * NOT item_no. A heading has none, and Number(null) is 0, which sorted every
+ * caption ahead of every row: the workbook opened with all of a department's
+ * headings stacked together and the programme underneath. sort_order is the one
+ * line both kinds of row share, and it is what the grid orders by.
+ */
 function sortForExport(rows: VPpaRow[]): VPpaRow[] {
   return [...rows].sort((a, b) =>
     Number(a.sector_sort) - Number(b.sector_sort) ||
     Number(a.department_sort) - Number(b.department_sort) ||
-    Number(a.item_no) - Number(b.item_no))
+    Number(a.sort_order) - Number(b.sort_order))
 }
+
+export const __test = { sortForExport }

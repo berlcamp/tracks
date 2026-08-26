@@ -38,10 +38,25 @@ async function main() {
   )
   const codeNumbers = new Map<string, number | null>(departments.map((d) => [d.id, d.code_number]))
 
+  // A stale tracks_demo silently produces a WRONG workbook rather than an
+  // error: without row_kind every heading maps to undefined and prints as an
+  // ordinary PPA row. Fail loudly instead — this script exists to prove the
+  // real SQL path, so it must not be run against a schema that is behind.
+  const { rows: shape } = await client.query(
+    `select 1 from information_schema.columns
+      where table_schema = 'tracks' and table_name = 'v_ppa_rows'
+        and column_name = 'row_kind'`,
+  )
+  if (shape.length === 0) {
+    throw new Error(
+      `${DB} is behind the migrations — v_ppa_rows has no row_kind. `
+      + `Rebuild it: ./supabase/tests/run-local.sh ${DB} && psql -d ${DB} -f supabase/seed.sql`)
+  }
+
   const { rows: ppaRows } = await client.query(
     `select * from tracks.v_ppa_rows
       where period_id = $1 and aip_kind = 'annual'
-      order by sector_sort, department_sort, group_sort_path, item_no`,
+      order by sector_sort, department_sort, sort_order`,
     [period.id],
   )
 

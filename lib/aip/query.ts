@@ -29,6 +29,7 @@ export interface VPpaRow {
   ccm_amount: string | number | null
   cc_typology_code: string | null
   row_kind: 'ppa' | 'header'
+  sort_order: string | number
   sector_id: string
   sector_code: string
   sector_heading: string
