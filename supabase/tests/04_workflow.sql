@@ -15,6 +15,20 @@
 \set PPA_1      '''90000000-0000-0000-0000-000000000001'''
 \set PPA_2      '''90000000-0000-0000-0000-000000000002'''
 
+
+-- The head signs for every line now, so every submit in this suite is preceded
+-- by approving the rows. Kept as one statement so the tests below read as
+-- workflow rather than as bookkeeping.
+create or replace function tracks_test.approve_all(p_aip_id uuid)
+returns void language plpgsql as $$
+declare r record;
+begin
+  for r in select id from tracks.ppas
+            where aip_id = p_aip_id and row_kind = 'ppa' loop
+    perform tracks.review_ppa(r.id, 'approved', 'Checked.');
+  end loop;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- 7. Draft: the department owns it
 -- ---------------------------------------------------------------------------
@@ -46,9 +60,12 @@ select tracks_test.logout();
 -- ---------------------------------------------------------------------------
 
 select tracks_test.login(:CMO_HEAD::uuid);
+select tracks_test.throws(format('select tracks.submit_aip(%L)', :CMO_AIP),
+  '8a-i. An AIP with rows the head has not read cannot be submitted');
+select tracks_test.approve_all(:CMO_AIP::uuid);
 select tracks.submit_aip(:CMO_AIP::uuid);
 select tracks_test.eq((select status from tracks.aips where id = :CMO_AIP::uuid),
-  'submitted', '8a. The department head can submit');
+  'submitted', '8a. The department head can submit once every row is approved');
 select tracks_test.logout();
 
 select tracks_test.login(:CMO_ENC::uuid);

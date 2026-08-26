@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import {
-  AlertTriangle, ArrowDownToLine, ArrowUpToLine, ChevronDown, Filter, Pencil,
-  Plus, Trash2, Undo2,
+  AlertTriangle, ArrowDownToLine, ArrowUpToLine, Check, CheckCircle2, ChevronDown,
+  CircleDashed, Filter, Pencil, Plus, Trash2, Undo2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,9 +14,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { buildGrid, filterRows } from '@/lib/aip/grid-model'
+import { REVIEW_STATUS_LABELS } from '@/lib/auth/permissions'
 import { money, moneyTotal, schedule } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { PpaRowView } from '@/types/tracks'
+import type { PpaRowView, ReviewDecision } from '@/types/tracks'
 
 /**
  * The AIP grid.
@@ -42,12 +43,15 @@ export interface AipGridProps {
   canEdit: (row: PpaRowView) => boolean
   /** Mirrors tracks.can_modify_aip_structure: may rows be added or removed. */
   canAddRow: boolean
-  canReturnItems: boolean
+  /** Mirrors tracks.review_ppa(): may this viewer decide on rows right now. */
+  canReview?: boolean
+  /** Show column (0), the reading each row has had. Off for the printout view. */
+  showReviewColumn?: boolean
   showDepartmentBands?: boolean
   onAdd?: (anchor: PpaRowView | null, placement: RowPlacement) => void
   onEdit?: (row: PpaRowView) => void
   onDelete?: (row: PpaRowView) => void
-  onReturn?: (row: PpaRowView) => void
+  onReview?: (row: PpaRowView, decision: ReviewDecision) => void
 }
 
 const HEAD = [
@@ -69,8 +73,9 @@ const HEAD = [
 const CELL = 'border border-border/70 px-2 py-1.5 align-top'
 
 export function AipGrid({
-  rows, canEdit, canAddRow, canReturnItems,
-  showDepartmentBands = true, onAdd, onEdit, onDelete, onReturn,
+  rows, canEdit, canAddRow, canReview = false,
+  showReviewColumn = false,
+  showDepartmentBands = true, onAdd, onEdit, onDelete, onReview,
 }: AipGridProps) {
   const [query, setQuery] = useState('')
 
@@ -84,10 +89,11 @@ export function AipGrid({
   // returned AIP that is true for the returned rows alone, which is why canEdit
   // is consulted rather than canAddRow on its own.
   const interactive = useMemo(
-    () => canAddRow || canReturnItems || filtered.some(canEdit),
-    [canAddRow, canReturnItems, filtered, canEdit],
+    () => canAddRow || canReview || filtered.some(canEdit),
+    [canAddRow, canReview, filtered, canEdit],
   )
-  const columnCount = HEAD.length + (interactive ? 1 : 0)
+  const columnCount =
+    HEAD.length + (interactive ? 1 : 0) + (showReviewColumn ? 1 : 0)
 
   const menuCell = (row: PpaRowView) => {
     if (!interactive) return null
@@ -97,11 +103,11 @@ export function AipGrid({
           row={row}
           canEditRow={canEdit(row)}
           canModifyStructure={canAddRow}
-          canReturn={canReturnItems && row.row_kind === 'ppa' && !row.is_returned}
+          canReview={canReview && row.row_kind === 'ppa'}
           onAdd={onAdd}
           onEdit={onEdit}
           onDelete={onDelete}
-          onReturn={onReturn}
+          onReview={onReview}
         />
       </td>
     )
@@ -133,6 +139,14 @@ export function AipGrid({
           <thead className="sticky top-0 z-10 bg-muted">
             <tr>
               {interactive ? <th className={cn(CELL, 'w-10')}><span className="sr-only">Row actions</span></th> : null}
+              {showReviewColumn ? (
+                <th className={cn(CELL, 'w-28 font-semibold whitespace-nowrap')}>
+                  <span className="block">Review</span>
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    not printed
+                  </span>
+                </th>
+              ) : null}
               {HEAD.map((column) => (
                 <th key={column.label}
                     className={cn(CELL, 'font-semibold whitespace-nowrap', column.className)}>
@@ -187,6 +201,7 @@ export function AipGrid({
                   return (
                     <tr key={entry.key} className="hover:bg-muted/40">
                       {menuCell(entry.row)}
+                      {showReviewColumn ? <td className={cn(CELL, 'w-28')} /> : null}
                       <td colSpan={HEAD.length}
                           className={cn(CELL, 'font-semibold')}>
                         {entry.name}
@@ -199,6 +214,9 @@ export function AipGrid({
                     <tr key={entry.key}
                         className={cn('hover:bg-muted/40', row.is_returned && 'bg-amber-500/10')}>
                       {menuCell(row)}
+                      {showReviewColumn ? (
+                        <td className={cn(CELL, 'w-28')}><ReviewBadge row={row} /></td>
+                      ) : null}
                       <td className={cn(CELL, 'whitespace-nowrap font-mono text-xs')}>{row.ref_code ?? ''}</td>
                       <td className={cn(CELL, 'text-center tabular-nums')}>{row.item_no ?? ''}</td>
                       <td className={CELL}>
@@ -244,6 +262,7 @@ export function AipGrid({
                           isSector ? 'bg-[#76923c] text-white' : 'bg-[#d6e3bc] text-neutral-900',
                         )}>
                       {interactive ? <td className={cn(CELL, 'w-10')} /> : null}
+                      {showReviewColumn ? <td className={cn(CELL, 'w-28')} /> : null}
                       <td colSpan={8} className={cn(CELL, 'text-right')}>
                         {entry.label}
                         {entry.filtered ? (
@@ -274,19 +293,20 @@ export function AipGrid({
  * the database.
  */
 function RowMenu({
-  row, canEditRow, canModifyStructure, canReturn, onAdd, onEdit, onDelete, onReturn,
+  row, canEditRow, canModifyStructure, canReview,
+  onAdd, onEdit, onDelete, onReview,
 }: {
   row: PpaRowView
   canEditRow: boolean
   canModifyStructure: boolean
-  canReturn: boolean
+  canReview: boolean
   onAdd?: (anchor: PpaRowView | null, placement: RowPlacement) => void
   onEdit?: (row: PpaRowView) => void
   onDelete?: (row: PpaRowView) => void
-  onReturn?: (row: PpaRowView) => void
+  onReview?: (row: PpaRowView, decision: ReviewDecision) => void
 }) {
   const label = row.row_kind === 'header' ? row.description : `item ${row.item_no}`
-  if (!canEditRow && !canModifyStructure && !canReturn) return null
+  if (!canEditRow && !canModifyStructure && !canReview) return null
 
   return (
     <DropdownMenu>
@@ -296,7 +316,20 @@ function RowMenu({
           <ChevronDown className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
+      <DropdownMenuContent align="start" className="w-56">
+        {canReview ? (
+          <>
+            <DropdownMenuItem onSelect={() => onReview?.(row, 'approved')}>
+              <Check className="size-4" />
+              {row.review_status === 'approved' ? 'Approve again' : 'Approve'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onReview?.(row, 'returned')}>
+              <Undo2 className="size-4" /> Return for revision
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+
         {canModifyStructure ? (
           <>
             <DropdownMenuItem onSelect={() => onAdd?.(row, 'above')}>
@@ -317,12 +350,6 @@ function RowMenu({
           </>
         ) : null}
 
-        {canReturn ? (
-          <DropdownMenuItem onSelect={() => onReturn?.(row)}>
-            <Undo2 className="size-4" /> Return to department
-          </DropdownMenuItem>
-        ) : null}
-
         {canModifyStructure ? (
           <>
             <DropdownMenuSeparator />
@@ -333,5 +360,43 @@ function RowMenu({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/**
+ * What has happened to this row, in the column the office reads down before
+ * anything else. It is deliberately not one of the numbered columns: nothing
+ * here is printed on the AIP form.
+ */
+function ReviewBadge({ row }: { row: PpaRowView }) {
+  const status = row.review_status ?? 'pending'
+  const label = REVIEW_STATUS_LABELS[status]
+
+  if (status === 'approved') {
+    return (
+      <Badge variant="outline"
+             className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400">
+        <CheckCircle2 className="size-3" /> Approved
+      </Badge>
+    )
+  }
+  if (status === 'returned') {
+    const badge = (
+      <Badge variant="outline"
+             className="border-amber-500/50 text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="size-3" /> For revision
+      </Badge>
+    )
+    return row.review_remarks ? (
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent className="max-w-xs">{row.review_remarks}</TooltipContent>
+      </Tooltip>
+    ) : badge
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <CircleDashed className="size-3" /> {label}
+    </span>
   )
 }

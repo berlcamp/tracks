@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openFirstAip, signIn } from './helpers'
+import { DEPARTMENT_EMAIL, openFirstAip, signIn } from './helpers'
 
 test.describe('the AIP grid', () => {
   test.beforeEach(async ({ page }) => {
@@ -133,4 +133,42 @@ test.describe('supplemental AIPs', () => {
       await page.waitForURL((url) => url.toString() !== before)
       await expect(page.getByText(/Supplemental AIP No\. 1/)).toBeVisible()
     })
+})
+
+test.describe('per-row review', () => {
+  test('shows the head what is still unread, and withholds Submit until it is',
+    async ({ page }) => {
+      await signIn(page, DEPARTMENT_EMAIL)
+      await openFirstAip(page)
+
+      // The reading each row has had, in a column that is not on the printout.
+      await expect(page.getByRole('columnheader', { name: /^Review/ })).toBeVisible()
+      await expect(page.getByText('Not yet checked').first()).toBeVisible()
+
+      // The head signs for every line, so the count is on screen…
+      await expect(page.getByText(/\d+ of \d+ rows? approved/)).toBeVisible()
+      // …and submitting is not offered while any of them is outstanding.
+      await expect(page.getByRole('button', { name: 'Submit to City Planning' }))
+        .toHaveCount(0)
+
+      // Both decisions are offered on the row itself.
+      await page.getByRole('button', { name: /^Actions for item 1$/ }).click()
+      await expect(page.getByRole('menuitem', { name: 'Approve' })).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: 'Return for revision' }))
+        .toBeVisible()
+      await page.keyboard.press('Escape')
+    })
+
+  test('will not send a row back without saying why', async ({ page }) => {
+    await signIn(page, DEPARTMENT_EMAIL)
+    await openFirstAip(page)
+
+    await page.getByRole('button', { name: /^Actions for item 1$/ }).click()
+    await page.getByRole('menuitem', { name: 'Return for revision' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: 'Return for revision' }).click()
+    await expect(dialog.getByText(/Say what needs correcting/)).toBeVisible()
+    await expect(dialog).toBeVisible()
+  })
 })

@@ -52,7 +52,38 @@ third-party.
   `ppa_revisions` have no UPDATE or DELETE policy: those operations are denied to
   everyone, planning admin included.
 
-### The submission lock
+### Review, in two stages
+Every PPA row is read twice, by two different people, and the reading is an
+append-only log (`ppa_reviews`) rather than a status column — a decision is a
+fact about a moment. The current status is the latest entry per (row, stage);
+`ppa_reviews` has no UPDATE and no DELETE policy, so an officer who changes
+their mind records a second decision rather than editing the first.
+
+| Stage | Who | When |
+|---|---|---|
+| `department` | the department head, on their own office's rows | while the AIP is `draft` |
+| `planning` | the City Planning Sector Officer (`planning_staff`) | once it is `submitted` |
+
+Both may approve or return, and both may attach remarks — an approval carrying
+"checked against the PPMP" is the thing a head can point at a year later.
+Returning requires a reason; approving does not.
+
+- **An approved row is frozen.** The department cannot edit or delete it. To
+  change it the approval is withdrawn first, which is a second entry in the log.
+- **The head cannot submit until every row is approved.** They sign for the
+  lines, not the folder.
+- **Submitting opens a fresh reading.** The head's approval is not City
+  Planning's, so `review_status` returns to `pending` at the planning stage.
+- **`finalize_aip_period()` is the administrator's one signature.** It accepts
+  every submitted department AIP and moves the period to `for_ldc` in one
+  transaction, and it refuses while any row is pending or returned, or any
+  department has not submitted. After it, nobody edits — City Planning included,
+  because `can_edit_ppa` allows only `open` and `consolidating` periods.
+
+`planning_staff` is labelled "City Planning Sector Officer" in the UI. The role
+key is unchanged; only `ROLE_LABELS` moved.
+
+## The submission lock
 The rule the whole department workflow turns on, and the one most likely to be
 broken by a later change:
 
@@ -61,6 +92,7 @@ broken by a later change:
 | `draft` | everything, and may add/remove rows |
 | `submitted` | nothing |
 | `returned` | **only the items with an open return** — 3 returned of 200 does not reopen the other 197. No rows may be added |
+| any status | never a row the reviewer has approved — that one is frozen until the approval is withdrawn |
 | `accepted` | nothing |
 
 City Planning may edit at any time until the period is `closed`. Enforced by
@@ -160,11 +192,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 55 unit tests — exporter, template fidelity, grid layout
-npm run test:db      # 103 SQL tests against a throwaway Postgres.app database
+npm test             # 72 unit tests — exporter, template fidelity, grid, permissions
+npm run test:db      # 137 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 26 Playwright tests against the local stack
+npm run test:e2e     # 29 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```

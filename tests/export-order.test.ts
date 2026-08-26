@@ -46,6 +46,7 @@ function gridRow(entry: (typeof DOCUMENT)[number]): PpaRowView {
     sector_id: 'sec-social', sector_code: 'SOCIAL',
     sector_heading: 'SOCIAL DEVELOPMENT SECTOR',
     sector_sheet_name: 'SOCIAL SERVICES Sector', sector_sort: 1,
+    period_status: 'open',
     row_kind: entry.kind, item_no: entry.itemNo, ref_code: null,
     description: entry.text, implementing_office: null,
     start_date: null, end_date: null, expected_output: null, funding_source: null,
@@ -53,6 +54,9 @@ function gridRow(entry: (typeof DOCUMENT)[number]): PpaRowView {
     amount_co: 0, amount_total: entry.kind === 'ppa' ? 1000 : 0,
     cca_amount: null, ccm_amount: null, cc_typology_code: null,
     continues_ppa_id: null, sort_order: entry.sortOrder,
+    dept_status: 'pending', dept_remarks: null,
+    planning_status: 'pending', planning_remarks: null,
+    review_status: 'pending', review_remarks: null,
     open_return_id: null, open_return_reason: null, open_return_at: null,
     is_returned: false,
   }

@@ -119,3 +119,4 @@ on the first `create table`.
 |---|---|
 | `0011_group_depth_cascade.sql` | **Skip.** Superseded by 0012, which drops the columns it fixes. Harmless if you already ran it. |
 | `0012_flat_rows.sql` | **Apply.** Column C becomes rows. Needs PostgreSQL 15+ and is **one-way**: nested headings flatten to consecutive ones. It verifies every AIP's rendered sequence is unchanged and aborts the transaction if not. |
+| `0013_row_review.sql` | **Apply after 0012.** Per-row review at two stages, the frozen-approval rule, and `finalize_aip_period()`. Additive — it creates `ppa_reviews` and rewrites functions and views; no data is dropped. Every existing row starts `pending`, so **a department mid-encoding will find it cannot submit until its head has approved each row.** Tell the offices before applying. |

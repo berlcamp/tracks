@@ -3,10 +3,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { requireRole } from '@/lib/auth/session'
 import { getConsolidated, getCurrentPeriod } from '@/lib/data/aip'
-import { PERIOD_STATUS_LABELS } from '@/lib/auth/permissions'
+import { PERIOD_STATUS_LABELS, canFinalizePeriod } from '@/lib/auth/permissions'
 import { moneyTotal } from '@/lib/format'
 import { routes } from '@/lib/routes'
 import { ConsolidatedGrid } from '@/components/aip/consolidated-grid'
+import { FinalizePanel } from '@/components/aip/finalize-panel'
 import { PaperTrail, type AipActionRow } from '@/components/aip/paper-trail'
 import { createClient } from '@/lib/supabase/server'
 import { isPlanning } from '@/lib/auth/permissions'
@@ -35,6 +36,16 @@ export default async function ConsolidatedPage() {
     .from('aip_actions').select('*').eq('period_id', period.id)
     .order('action_date', { ascending: false })
 
+  // What is still outstanding, counted from the rows themselves rather than
+  // trusted from a status column — the same three questions the database asks
+  // before it will let the programme go forward.
+  const mayFinalize = canFinalizePeriod(session.role, session.isSuperAdmin, period.status)
+  const programme = consolidated.rows.filter((row) => row.row_kind === 'ppa')
+  const { data: submissions } = await supabase
+    .from('v_aip_totals').select('status').eq('period_id', period.id).eq('kind', 'annual')
+  const unsubmitted = ((submissions ?? []) as { status: string }[])
+    .filter((s) => s.status === 'draft' || s.status === 'returned').length
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -60,6 +71,15 @@ export default async function ConsolidatedPage() {
           </Button>
         </div>
       </div>
+
+      {mayFinalize ? (
+        <FinalizePanel
+          periodId={period.id}
+          unsubmitted={unsubmitted}
+          pending={programme.filter((row) => row.planning_status === 'pending').length}
+          returned={programme.filter((row) => row.planning_status === 'returned').length}
+        />
+      ) : null}
 
       <PaperTrail
         periodId={period.id}

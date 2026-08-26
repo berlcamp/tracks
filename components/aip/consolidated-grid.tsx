@@ -17,7 +17,6 @@ export function ConsolidatedGrid({ rows }: { rows: PpaRowView[] }) {
       rows={rows}
       canEdit={() => false}
       canAddRow={false}
-      canReturnItems={false}
       showDepartmentBands
     />
   )

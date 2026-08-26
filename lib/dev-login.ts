@@ -28,7 +28,7 @@ export interface DevAccount {
  */
 export const DEV_ACCOUNTS: DevAccount[] = [
   { email: 'planning@tracks.local',    name: 'Perla Planning',      role: 'City Planning Administrator', scope: 'City-wide' },
-  { email: 'planstaff@tracks.local',   name: 'Sonia Staff',         role: 'City Planning Staff',         scope: 'City-wide' },
+  { email: 'planstaff@tracks.local',   name: 'Sonia Staff',         role: 'City Planning Sector Officer', scope: 'City-wide' },
   { email: 'budget@tracks.local',      name: 'Benito Budget',       role: 'Budget Office',               scope: 'City-wide' },
   { email: 'accounting@tracks.local',  name: 'Aurora Accounting',   role: 'Accounting Office',           scope: 'City-wide' },
   { email: 'viewer@tracks.local',      name: 'Victor Viewer',       role: 'Viewer',                      scope: 'City-wide' },

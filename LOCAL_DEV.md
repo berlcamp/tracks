@@ -65,7 +65,7 @@ Creates one sign-in per role, all with the password `localdev12345`:
 | Email | Role | Scope |
 |---|---|---|
 | `planning@tracks.local` | City Planning Administrator | city-wide |
-| `planstaff@tracks.local` | City Planning Staff | city-wide |
+| `planstaff@tracks.local` | City Planning Sector Officer | city-wide |
 | `budget@tracks.local` | Budget Office | city-wide |
 | `accounting@tracks.local` | Accounting Office | city-wide |
 | `viewer@tracks.local` | Viewer (read-only) | city-wide |

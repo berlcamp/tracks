@@ -40,7 +40,7 @@ const WORKFLOW = [
 const ROLES = [
   { name: 'Department Encoder', detail: 'Builds and edits the office’s PPAs.' },
   { name: 'Department Head', detail: 'The only role that can submit the office’s AIP.' },
-  { name: 'City Planning Staff', detail: 'Reviews submissions, returns items, consolidates.' },
+  { name: 'City Planning Sector Officer', detail: 'Reads every submitted row — approves it or sends it back with remarks.' },
   { name: 'City Planning Administrator', detail: 'Sectors, departments, periods and users.' },
   { name: 'Budget Office', detail: 'Records allotments and obligations.' },
   { name: 'Accounting Office', detail: 'Records disbursements against obligations.' },

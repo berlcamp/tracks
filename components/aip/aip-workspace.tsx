@@ -6,9 +6,9 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AipGrid, type RowPlacement } from './aip-grid'
+import { ReviewDialog } from './review-dialog'
 import { SubmissionSwitcher } from './submission-switcher'
 import { PpaDialog } from './ppa-dialog'
-import { ReturnDialog } from './return-dialog'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -17,12 +17,12 @@ import { acceptAip, resolveReturn, submitAip } from '@/app/actions/aip'
 import { deletePpa } from '@/app/actions/ppa'
 import { moneyTotal } from '@/lib/format'
 import {
-  AIP_STATUS_LABELS, canAccept, canEditPpa, canModifyStructure, canReturnItems, canSubmit,
-  type EditContext,
+  AIP_STATUS_LABELS, canAccept, canEditPpa, canModifyStructure,
+  canReviewPpa, canSubmit, reviewStage, type EditContext,
 } from '@/lib/auth/permissions'
 import { routes } from '@/lib/routes'
 import type {
-  Aip, AipPeriod, AipTotals, Department, PpaRowView,
+  Aip, AipPeriod, AipTotals, Department, PpaRowView, ReviewDecision,
 } from '@/types/tracks'
 
 /**
@@ -46,15 +46,19 @@ export function AipWorkspace({
   const [placement, setPlacement] = useState<RowPlacement>('end')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState<PpaRowView | null>(null)
-  const [returning, setReturning] = useState<PpaRowView | null>(null)
-  const [returnOpen, setReturnOpen] = useState(false)
+  const [reviewing, setReviewing] = useState<PpaRowView | null>(null)
+  const [decision, setDecision] = useState<ReviewDecision>('approved')
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   const openReturns = rows.filter((row) => row.is_returned).length
+  const programmeRows = rows.filter((row) => row.row_kind === 'ppa')
+  const unread = programmeRows.filter((row) => row.review_status !== 'approved').length
+  const stage = reviewStage(aip.status)
   const mayAdd = canModifyStructure(ctx)
-  const maySubmit = canSubmit(ctx, openReturns)
+  const mayReview = canReviewPpa(ctx)
+  const maySubmit = canSubmit(ctx, openReturns, unread)
   const mayAccept = canAccept(ctx, openReturns)
-  const mayReturn = canReturnItems(ctx)
 
   return (
     <div className="flex flex-col gap-5">
@@ -117,6 +121,25 @@ export function AipWorkspace({
         </div>
       </div>
 
+      {programmeRows.length > 0 && (mayReview || ctx.role === 'dept_head') ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-4 py-3 text-sm">
+          <span className="font-medium">
+            {programmeRows.length - unread} of {programmeRows.length} row
+            {programmeRows.length === 1 ? '' : 's'} approved
+          </span>
+          <span className="text-muted-foreground">
+            {stage === 'department'
+              ? '— the head reads every line before this AIP is sent in'
+              : '— the City Planning Sector Officer is reading these'}
+          </span>
+          {unread > 0 && ctx.role === 'dept_head' && stage === 'department' ? (
+            <span className="ml-auto text-muted-foreground">
+              Submitting opens once nothing is left waiting.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       <SubmissionSwitcher submissions={siblings} currentAipId={aip.id} />
 
       {aip.status === 'returned' && openReturns > 0 ? (
@@ -138,7 +161,7 @@ export function AipWorkspace({
             <p className="font-medium">Item {row.item_no} — {row.description}</p>
             <p className="mt-0.5 text-muted-foreground">{row.open_return_reason}</p>
           </div>
-          {canEditPpa(ctx, true) ? (
+          {canEditPpa(ctx, true, null) ? (
             <Button
               size="sm" variant="outline" disabled={pending}
               onClick={() =>
@@ -158,14 +181,17 @@ export function AipWorkspace({
         rows={rows}
         showDepartmentBands={false}
         canAddRow={mayAdd}
-        canReturnItems={mayReturn}
-        canEdit={(row) => canEditPpa(ctx, row.is_returned)}
+        canReview={mayReview}
+        showReviewColumn={mayReview || ctx.role === 'dept_head' || openReturns > 0}
+        canEdit={(row) => canEditPpa(ctx, row.is_returned, row.review_status)}
         onAdd={(row, where) => {
           setEditing(null); setAnchor(row); setPlacement(where); setDialogOpen(true)
         }}
         onEdit={(row) => { setEditing(row); setAnchor(null); setDialogOpen(true) }}
         onDelete={(row) => setDeleting(row)}
-        onReturn={(row) => { setReturning(row); setReturnOpen(true) }}
+        onReview={(row, next) => {
+          setReviewing(row); setDecision(next); setReviewOpen(true)
+        }}
       />
 
       <PpaDialog
@@ -176,7 +202,13 @@ export function AipWorkspace({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
-      <ReturnDialog row={returning} open={returnOpen} onOpenChange={setReturnOpen} />
+      <ReviewDialog
+        row={reviewing}
+        decision={decision}
+        stage={stage}
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+      />
 
       <AlertDialog open={deleting !== null}
                    onOpenChange={(next) => { if (!next) setDeleting(null) }}>

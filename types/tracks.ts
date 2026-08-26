@@ -76,6 +76,11 @@ export interface Aip {
  *  description and nothing else. */
 export type PpaRowKind = 'ppa' | 'header'
 
+/** Where a row has got to with whoever is reading it now. */
+export type ReviewStatus = 'pending' | 'approved' | 'returned'
+export type ReviewDecision = 'approved' | 'returned'
+export type ReviewStage = 'department' | 'planning'
+
 /** A row of tracks.v_ppa_rows. */
 export interface PpaRowView {
   id: string
@@ -85,6 +90,7 @@ export interface PpaRowView {
   aip_kind: 'annual' | 'supplemental'
   supplemental_no: number | null
   aip_status: AipStatus
+  period_status: PeriodStatus
   department_id: string
   department_code: string
   department_name: string
@@ -114,6 +120,14 @@ export interface PpaRowView {
   cc_typology_code: string | null
   continues_ppa_id: string | null
   sort_order: number
+  /** The department head's reading, kept beside City Planning's. */
+  dept_status: ReviewStatus | null
+  dept_remarks: string | null
+  planning_status: ReviewStatus | null
+  planning_remarks: string | null
+  /** Whichever of the two applies at the AIP's current status. */
+  review_status: ReviewStatus | null
+  review_remarks: string | null
   open_return_id: string | null
   open_return_reason: string | null
   open_return_at: string | null
