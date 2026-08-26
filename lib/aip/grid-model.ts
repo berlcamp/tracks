@@ -18,7 +18,7 @@ export interface AmountTotals {
 export type GridRow =
   | { kind: 'sector'; key: string; sectorId: string; heading: string }
   | { kind: 'department'; key: string; departmentId: string; displayName: string }
-  | { kind: 'group'; key: string; depth: number; name: string }
+  | { kind: 'group'; key: string; name: string; row: PpaRowView }
   | { kind: 'ppa'; key: string; row: PpaRowView }
   | { kind: 'departmentTotal'; key: string; label: string; totals: AmountTotals; filtered: boolean }
   | { kind: 'sectorTotal'; key: string; label: string; totals: AmountTotals; filtered: boolean }
@@ -63,7 +63,6 @@ export function buildGrid(rows: PpaRowView[], options: BuildGridOptions = {}): G
   const out: GridRow[] = []
   let sectorId: string | null = null
   let departmentId: string | null = null
-  let groupPath: string[] = []
   let sectorTotals = EMPTY
   let departmentTotals = EMPTY
   let sectorLabel = ''
@@ -98,7 +97,6 @@ export function buildGrid(rows: PpaRowView[], options: BuildGridOptions = {}): G
       flushDepartment()
       flushSector()
       departmentId = null
-      groupPath = []
       sectorId = row.sector_id
       sectorLabel = row.sector_heading
       if (showSectorBands) {
@@ -111,7 +109,6 @@ export function buildGrid(rows: PpaRowView[], options: BuildGridOptions = {}): G
 
     if (row.department_id !== departmentId) {
       flushDepartment()
-      groupPath = []
       departmentId = row.department_id
       departmentLabel = row.department_name
       if (showDepartmentBands) {
@@ -122,17 +119,13 @@ export function buildGrid(rows: PpaRowView[], options: BuildGridOptions = {}): G
       }
     }
 
-    const path = row.group_path ?? []
-    for (let depth = 0; depth < path.length; depth++) {
-      if (groupPath[depth] === path[depth] && samePrefix(groupPath, path, depth)) continue
-      out.push({
-        kind: 'group',
-        key: `g-${row.id}-${depth}`,
-        depth: depth + 1,
-        name: path[depth] ?? '',
-      })
+    // A heading is a row of the document, so it needs no reconstruction from
+    // an ancestry — it simply is where it is. It carries no money, so it is
+    // pushed and skipped rather than added to a subtotal.
+    if (row.row_kind === 'header') {
+      out.push({ kind: 'group', key: `g-${row.id}`, name: row.description, row })
+      continue
     }
-    groupPath = path
 
     out.push({ kind: 'ppa', key: `p-${row.id}`, row })
     departmentTotals = add(departmentTotals, row)
@@ -144,20 +137,37 @@ export function buildGrid(rows: PpaRowView[], options: BuildGridOptions = {}): G
   return out
 }
 
-function samePrefix(a: string[], b: string[], depth: number): boolean {
-  for (let i = 0; i < depth; i++) if (a[i] !== b[i]) return false
-  return true
-}
-
-/** Free-text filter across the columns an officer actually searches. */
+/**
+ * Free-text filter across the columns an officer actually searches.
+ *
+ * A heading is kept only if a row still stands under it, or if it matches the
+ * search itself. Left in unconditionally, filtering would strand captions over
+ * nothing — "Support to Tech4ed" followed immediately by the next caption. The
+ * exporter applies the same rule, or screen and workbook disagree.
+ */
 export function filterRows(rows: PpaRowView[], query: string): PpaRowView[] {
   const needle = query.trim().toLowerCase()
   if (!needle) return rows
-  return rows.filter((row) =>
+
+  const matches = (row: PpaRowView) =>
     [
       row.ref_code, row.description, row.implementing_office,
-      row.expected_output, row.funding_source, ...(row.group_path ?? []),
+      row.expected_output, row.funding_source,
     ]
       .filter(Boolean)
-      .some((field) => String(field).toLowerCase().includes(needle)))
+      .some((field) => String(field).toLowerCase().includes(needle))
+
+  const kept = rows.filter(matches)
+
+  return kept.filter((row, index) => {
+    if (row.row_kind !== 'header') return true
+    if (matches(row)) return true
+    for (let i = index + 1; i < kept.length; i++) {
+      const next = kept[i]
+      if (!next || next.department_id !== row.department_id) return false
+      if (next.row_kind === 'header') return false
+      return true
+    }
+    return false
+  })
 }

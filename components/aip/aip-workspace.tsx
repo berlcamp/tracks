@@ -1,23 +1,28 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Download, Send, CheckCircle2, Undo2, ListTree } from 'lucide-react'
+import { Download, Send, CheckCircle2, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { AipGrid } from './aip-grid'
+import { AipGrid, type RowPlacement } from './aip-grid'
 import { SubmissionSwitcher } from './submission-switcher'
 import { PpaDialog } from './ppa-dialog'
-import { GroupsDialog } from './groups-dialog'
 import { ReturnDialog } from './return-dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { acceptAip, resolveReturn, submitAip } from '@/app/actions/aip'
+import { deletePpa } from '@/app/actions/ppa'
+import { moneyTotal } from '@/lib/format'
 import {
   AIP_STATUS_LABELS, canAccept, canEditPpa, canModifyStructure, canReturnItems, canSubmit,
   type EditContext,
 } from '@/lib/auth/permissions'
 import { routes } from '@/lib/routes'
 import type {
-  Aip, AipPeriod, AipTotals, Department, PpaGroup, PpaRowView,
+  Aip, AipPeriod, AipTotals, Department, PpaRowView,
 } from '@/types/tracks'
 
 /**
@@ -27,19 +32,20 @@ import type {
  * cannot do; the database is what actually refuses.
  */
 export function AipWorkspace({
-  aip, period, department, rows, groups, siblings, ctx,
+  aip, period, department, rows, siblings, ctx,
 }: {
   aip: Aip
   period: AipPeriod
   department: Department
   rows: PpaRowView[]
-  groups: PpaGroup[]
   siblings: AipTotals[]
   ctx: EditContext
 }) {
   const [editing, setEditing] = useState<PpaRowView | null>(null)
+  const [anchor, setAnchor] = useState<PpaRowView | null>(null)
+  const [placement, setPlacement] = useState<RowPlacement>('end')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [groupsOpen, setGroupsOpen] = useState(false)
+  const [deleting, setDeleting] = useState<PpaRowView | null>(null)
   const [returning, setReturning] = useState<PpaRowView | null>(null)
   const [returnOpen, setReturnOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -75,12 +81,6 @@ export function AipWorkspace({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {mayAdd ? (
-            <Button variant="outline" onClick={() => setGroupsOpen(true)}>
-              <ListTree className="size-4" /> Column-C headings
-            </Button>
-          ) : null}
-
           <Button variant="outline" asChild>
             <a href={routes.aipExport(aip.id)}>
               <Download className="size-4" /> Export to Excel
@@ -160,26 +160,62 @@ export function AipWorkspace({
         canAddRow={mayAdd}
         canReturnItems={mayReturn}
         canEdit={(row) => canEditPpa(ctx, row.is_returned)}
-        onAdd={() => { setEditing(null); setDialogOpen(true) }}
-        onEdit={(row) => { setEditing(row); setDialogOpen(true) }}
+        onAdd={(row, where) => {
+          setEditing(null); setAnchor(row); setPlacement(where); setDialogOpen(true)
+        }}
+        onEdit={(row) => { setEditing(row); setAnchor(null); setDialogOpen(true) }}
+        onDelete={(row) => setDeleting(row)}
         onReturn={(row) => { setReturning(row); setReturnOpen(true) }}
       />
 
       <PpaDialog
         aipId={aip.id}
-        groups={groups}
         row={editing}
+        anchor={anchor}
+        placement={placement}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
-      <GroupsDialog
-        aipId={aip.id}
-        groups={groups}
-        rows={rows}
-        open={groupsOpen}
-        onOpenChange={setGroupsOpen}
-      />
       <ReturnDialog row={returning} open={returnOpen} onOpenChange={setReturnOpen} />
+
+      <AlertDialog open={deleting !== null}
+                   onOpenChange={(next) => { if (!next) setDeleting(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleting?.row_kind === 'header'
+                ? `Delete the heading “${deleting.description}”?`
+                : `Delete item ${deleting?.item_no}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleting?.row_kind === 'header'
+                ? 'The rows under it stay exactly where they are — a heading is a '
+                  + 'caption, not a container.'
+                : `${deleting?.description} · ${moneyTotal(deleting?.amount_total ?? 0)}. `
+                  + 'The rows below renumber themselves.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pending}
+              onClick={(event) => {
+                event.preventDefault()
+                const target = deleting
+                if (!target) return
+                startTransition(async () => {
+                  const result = await deletePpa(target.id, aip.id)
+                  if (result.ok) toast.success('Row deleted.')
+                  else toast.error(result.error)
+                  setDeleting(null)
+                })
+              }}
+            >
+              Delete row
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

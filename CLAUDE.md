@@ -39,7 +39,14 @@ third-party.
   source workbook's "(In Thousand Pesos)" caption is wrong and the exporter
   prints the corrected one.
 - `ppas.amount_total` is a generated column. `item_no` is **not stored** — it is
-  `row_number()` in `v_ppa_rows`, so column (2) renumbers itself.
+  `row_number()` in `v_ppa_rows` over `row_kind = 'ppa'` only, so column (2)
+  renumbers itself and a heading takes no number and consumes none: the sequence
+  reads 37, heading, heading, 38.
+- **Nothing may point at a heading.** `ppa_returns`, `allotments`, `obligations`,
+  `disbursements`, `ppa_progress` and `continues_ppa_id` reference
+  `(id, row_kind)`, so Budget cannot allot against "Support to Tech4ed". A
+  `ppas_header_is_caption_only` CHECK keeps a heading free of dates, office and
+  money — one holding ₱5m would land in a subtotal while printing as a caption.
 - `ppa_revisions` is written by trigger, so a City Planning overwrite of a
   department's figure can never happen off the record. `audit_logs` and
   `ppa_revisions` have no UPDATE or DELETE policy: those operations are denied to
@@ -65,9 +72,13 @@ City Planning may edit at any time until the period is `closed`. Enforced by
 - **A department belongs to exactly one sector.** Verified: no department appears
   on two sector worksheets. That is what makes the consolidated layout
   reproducible. If it ever stops being true, `sector_id` moves onto the PPA.
-- **Column C is a real tree, 1–3 levels deep**, and the depth is *not* recoverable
-  from formatting (row 334 of PUBLIC SERVICES is a group row that is not bold).
-  `ppa_groups` is therefore self-referencing with a derived `depth`.
+- **Column C is a caption row, not a tree.** The source workbook nests headings
+  1–3 deep conceptually, but `writeGroupRow` only ever printed a name: no indent,
+  no weight change, nothing. The nesting was never visible in the artefact the
+  tree existed to produce, so `0012` folded it away. A heading is now a `ppas`
+  row with `row_kind = 'header'` carrying only a description, and the whole
+  document is one `sort_order` line — which is the only model in which "insert a
+  row below this one" means the same thing everywhere. Flattening was one-way.
 - **Statutory-fund sheets are out of scope** (20% CDF, 5% CDRRMF, 5% GAD, 1% LCPC,
   INFRASTRUCTURE CONSO). Only the sector sheets and SUMMARY are modelled.
 - **Climate-change columns (13)(14)(15) exist but are never populated** in the
@@ -115,21 +126,25 @@ type scale match.
 - `lib/auth/permissions.ts` mirrors the database's rules so the UI can hide what a
   user cannot do. It is **not** the enforcement: RLS and the workflow RPCs are.
   Keep the two in step — `canEditPpa` is `tracks.can_edit_ppa`.
-- `lib/aip/grid-model.ts` turns PPA rows into the grid's band/group/subtotal
+- `lib/aip/grid-model.ts` turns rows into the grid's band/heading/subtotal
   sequence. It is a pure function and it is tested, because this layout has to
   agree with the exported workbook's layout.
+- Rows are added the way a spreadsheet adds them: a per-row menu in a leading
+  column outside the printed `(1)`–`(15)` numbering, offering add above, add
+  below, edit and delete. The add modal asks which kind of row first — a line of
+  the programme, or a column-C caption. Inserting goes through
+  `tracks.insert_ppa_row`, which is `SECURITY INVOKER`: it bypasses nothing, so
+  the same policies still judge it, and the shift plus the insert are one
+  transaction. Deleting leaves a gap in `sort_order` on purpose — the document is
+  ordered by the sequence, not its values.
 - Writes to `ppas` go through the RLS-bound client, not an RPC, so the submission
   lock rejects them in exactly the way psql does. Workflow transitions
   (submit/return/resolve/accept/reopen) go through the RPCs.
-- `components/aip/groups-dialog.tsx` edits column C as a tree, because that is
-  what it is: a PPA filed three levels down prints both ancestors above it, and a
-  heading's position is what orders the worksheet. Move targets that the database
-  would refuse — a heading's own subtree, a parent that would breach the depth
-  cap — are not offered. Deleting a heading keeps every PPA under it: the row
-  goes ungrouped, it does not go away.
 - Filtering the grid recomputes the subtotal rows over the visible rows and marks
   them "(filtered rows only)" — a subtotal that silently included hidden rows
-  would be worse than no subtotal.
+  would be worse than no subtotal. A heading survives a filter only if a row
+  still stands under it or it matches the search itself, and the exporter applies
+  the same rule, or screen and workbook disagree.
 - A department's annual AIP and its supplementals are shown **side by side and
   never merged**. Each is a document with its own status, its own council leg and
   its own printout; a merged view would invent a combined programme no office
@@ -145,11 +160,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 52 unit tests — exporter, template fidelity, grid layout
-npm run test:db      # 99 SQL tests against a throwaway Postgres.app database
+npm test             # 55 unit tests — exporter, template fidelity, grid layout
+npm run test:db      # 103 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 25 Playwright tests against the local stack
+npm run test:e2e     # 26 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```

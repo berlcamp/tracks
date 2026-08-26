@@ -112,3 +112,10 @@ npm run deploy:bundle    # regenerate + verify the bundle
 Apply **only the new file** to the cloud project through the SQL Editor. The
 bundle is for a first install; it is not idempotent and re-running it will fail
 on the first `create table`.
+
+### Pending on the shared project
+
+| Migration | Apply? |
+|---|---|
+| `0011_group_depth_cascade.sql` | **Skip.** Superseded by 0012, which drops the columns it fixes. Harmless if you already ran it. |
+| `0012_flat_rows.sql` | **Apply.** Column C becomes rows. Needs PostgreSQL 15+ and is **one-way**: nested headings flatten to consecutive ones. It verifies every AIP's rendered sequence is unchanged and aborts the transaction if not. |

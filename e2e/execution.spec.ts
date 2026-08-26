@@ -101,7 +101,7 @@ test.describe('the separation between Budget and Accounting', () => {
   test('a viewer is offered nothing to write anywhere', async ({ page }) => {
     await signIn(page, VIEWER_EMAIL)
     await page.goto('/aip')
-    await expect(page.getByRole('button', { name: 'Add row' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Actions for / })).toHaveCount(0)
     await page.goto('/settings')
     await expect(page).toHaveURL(/\/dashboard/)
   })

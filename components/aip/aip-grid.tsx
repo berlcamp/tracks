@@ -1,9 +1,16 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Filter, Pencil, Plus, Undo2 } from 'lucide-react'
+import {
+  AlertTriangle, ArrowDownToLine, ArrowUpToLine, ChevronDown, Filter, Pencil,
+  Plus, Trash2, Undo2,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { buildGrid, filterRows } from '@/lib/aip/grid-model'
@@ -16,20 +23,30 @@ import type { PpaRowView } from '@/types/tracks'
  *
  * It is a plain table on purpose. The office reads this document in Excel every
  * year, so the layout is theirs: sector band, department band, the column-C
- * group rows, the numbered money columns, the subtotal rows. Editing is through
- * a modal — the cells themselves are never editable in place, which is what
- * keeps a mis-click from silently changing a figure in a submitted programme.
+ * heading rows, the numbered money columns, the subtotal rows. Editing is
+ * through a modal — the cells themselves are never editable in place, which is
+ * what keeps a mis-click from silently changing a figure in a submitted
+ * programme.
+ *
+ * Rows are added the way a spreadsheet adds them: from a menu on the row you
+ * are looking at, above it or below it. The menu lives in a leading column
+ * outside the printed (1)–(15) numbering, because every printed column is
+ * asserted against the real workbook by tests/aip-template.test.ts.
  */
+
+export type RowPlacement = 'above' | 'below' | 'end'
 
 export interface AipGridProps {
   rows: PpaRowView[]
   /** Which rows this viewer may open for editing. */
   canEdit: (row: PpaRowView) => boolean
+  /** Mirrors tracks.can_modify_aip_structure: may rows be added or removed. */
   canAddRow: boolean
   canReturnItems: boolean
   showDepartmentBands?: boolean
+  onAdd?: (anchor: PpaRowView | null, placement: RowPlacement) => void
   onEdit?: (row: PpaRowView) => void
-  onAdd?: () => void
+  onDelete?: (row: PpaRowView) => void
   onReturn?: (row: PpaRowView) => void
 }
 
@@ -53,7 +70,7 @@ const CELL = 'border border-border/70 px-2 py-1.5 align-top'
 
 export function AipGrid({
   rows, canEdit, canAddRow, canReturnItems,
-  showDepartmentBands = true, onEdit, onAdd, onReturn,
+  showDepartmentBands = true, onAdd, onEdit, onDelete, onReturn,
 }: AipGridProps) {
   const [query, setQuery] = useState('')
 
@@ -63,6 +80,33 @@ export function AipGrid({
     [filtered, showDepartmentBands, query],
   )
 
+  // The menu column earns its place only if this viewer can do something. On a
+  // returned AIP that is true for the returned rows alone, which is why canEdit
+  // is consulted rather than canAddRow on its own.
+  const interactive = useMemo(
+    () => canAddRow || canReturnItems || filtered.some(canEdit),
+    [canAddRow, canReturnItems, filtered, canEdit],
+  )
+  const columnCount = HEAD.length + (interactive ? 1 : 0)
+
+  const menuCell = (row: PpaRowView) => {
+    if (!interactive) return null
+    return (
+      <td className={cn(CELL, 'w-10 px-1')}>
+        <RowMenu
+          row={row}
+          canEditRow={canEdit(row)}
+          canModifyStructure={canAddRow}
+          canReturn={canReturnItems && row.row_kind === 'ppa' && !row.is_returned}
+          onAdd={onAdd}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onReturn={onReturn}
+        />
+      </td>
+    )
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -71,7 +115,7 @@ export function AipGrid({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by description, ref. code, funding source, group…"
+            placeholder="Filter by description, ref. code, funding source…"
             className="pl-8"
           />
         </div>
@@ -80,13 +124,6 @@ export function AipGrid({
             {filtered.length} of {rows.length} rows
           </span>
         ) : null}
-        <div className="ml-auto">
-          {canAddRow ? (
-            <Button size="sm" onClick={onAdd}>
-              <Plus className="size-4" /> Add row
-            </Button>
-          ) : null}
-        </div>
       </div>
 
       {/* The table scrolls inside its own container; the page never scrolls
@@ -95,6 +132,7 @@ export function AipGrid({
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-muted">
             <tr>
+              {interactive ? <th className={cn(CELL, 'w-10')}><span className="sr-only">Row actions</span></th> : null}
               {HEAD.map((column) => (
                 <th key={column.label}
                     className={cn(CELL, 'font-semibold whitespace-nowrap', column.className)}>
@@ -104,16 +142,24 @@ export function AipGrid({
                   </span>
                 </th>
               ))}
-              <th className={cn(CELL, 'w-24')} />
             </tr>
           </thead>
           <tbody>
             {grid.length === 0 ? (
               <tr>
-                <td colSpan={HEAD.length + 1} className="px-4 py-16 text-center text-muted-foreground">
-                  {rows.length === 0
-                    ? 'No programs, projects or activities yet.'
-                    : 'No rows match this filter.'}
+                <td colSpan={columnCount} className="px-4 py-16 text-center text-muted-foreground">
+                  {rows.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <p>No programs, projects or activities yet.</p>
+                      {canAddRow ? (
+                        <Button size="sm" onClick={() => onAdd?.(null, 'end')}>
+                          <Plus className="size-4" /> Add the first row
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    'No rows match this filter.'
+                  )}
                 </td>
               </tr>
             ) : null}
@@ -123,7 +169,7 @@ export function AipGrid({
                 case 'sector':
                   return (
                     <tr key={entry.key}>
-                      <td colSpan={HEAD.length + 1}
+                      <td colSpan={columnCount}
                           className={cn(CELL, 'bg-[#76923c] font-semibold text-white')}>
                         {entry.heading}
                       </td>
@@ -132,29 +178,29 @@ export function AipGrid({
                 case 'department':
                   return (
                     <tr key={entry.key}>
-                      <td colSpan={HEAD.length + 1} className={cn(CELL, 'font-semibold')}>
+                      <td colSpan={columnCount} className={cn(CELL, 'font-semibold')}>
                         {entry.displayName}
                       </td>
                     </tr>
                   )
                 case 'group':
                   return (
-                    <tr key={entry.key}>
-                      <td colSpan={HEAD.length + 1}
-                          className={cn(CELL, 'font-medium text-muted-foreground')}
-                          style={{ paddingLeft: `${0.5 + (entry.depth - 1) * 1.25}rem` }}>
+                    <tr key={entry.key} className="hover:bg-muted/40">
+                      {menuCell(entry.row)}
+                      <td colSpan={HEAD.length}
+                          className={cn(CELL, 'font-semibold')}>
                         {entry.name}
                       </td>
                     </tr>
                   )
                 case 'ppa': {
                   const row = entry.row
-                  const editable = canEdit(row)
                   return (
                     <tr key={entry.key}
                         className={cn('hover:bg-muted/40', row.is_returned && 'bg-amber-500/10')}>
+                      {menuCell(row)}
                       <td className={cn(CELL, 'whitespace-nowrap font-mono text-xs')}>{row.ref_code ?? ''}</td>
-                      <td className={cn(CELL, 'text-center tabular-nums')}>{row.item_no}</td>
+                      <td className={cn(CELL, 'text-center tabular-nums')}>{row.item_no ?? ''}</td>
                       <td className={CELL}>
                         <div className="flex items-start gap-2">
                           <span>{row.description}</span>
@@ -185,24 +231,6 @@ export function AipGrid({
                       <td className={cn(CELL, 'text-right font-mono font-medium tabular-nums')}>
                         {moneyTotal(row.amount_total)}
                       </td>
-                      <td className={cn(CELL, 'whitespace-nowrap')}>
-                        <div className="flex items-center gap-1">
-                          {editable ? (
-                            <Button size="icon" variant="ghost" className="size-7"
-                                    aria-label={`Edit ${row.description}`}
-                                    onClick={() => onEdit?.(row)}>
-                              <Pencil className="size-3.5" />
-                            </Button>
-                          ) : null}
-                          {canReturnItems && !row.is_returned ? (
-                            <Button size="icon" variant="ghost" className="size-7"
-                                    aria-label={`Return ${row.description}`}
-                                    onClick={() => onReturn?.(row)}>
-                              <Undo2 className="size-3.5" />
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
                     </tr>
                   )
                 }
@@ -215,6 +243,7 @@ export function AipGrid({
                           'font-semibold',
                           isSector ? 'bg-[#76923c] text-white' : 'bg-[#d6e3bc] text-neutral-900',
                         )}>
+                      {interactive ? <td className={cn(CELL, 'w-10')} /> : null}
                       <td colSpan={8} className={cn(CELL, 'text-right')}>
                         {entry.label}
                         {entry.filtered ? (
@@ -226,7 +255,6 @@ export function AipGrid({
                       <td className={cn(CELL, 'text-right font-mono tabular-nums')}>{moneyTotal(entry.totals.fe)}</td>
                       <td className={cn(CELL, 'text-right font-mono tabular-nums')}>{moneyTotal(entry.totals.co)}</td>
                       <td className={cn(CELL, 'text-right font-mono tabular-nums')}>{moneyTotal(entry.totals.total)}</td>
-                      <td className={CELL} />
                     </tr>
                   )
                 }
@@ -236,5 +264,74 @@ export function AipGrid({
         </table>
       </div>
     </div>
+  )
+}
+
+/**
+ * What a viewer may do to one row. The contents are computed per row rather
+ * than per screen: on a returned AIP only the returned items open, and nothing
+ * may be added or removed, which is what can_modify_aip_structure enforces in
+ * the database.
+ */
+function RowMenu({
+  row, canEditRow, canModifyStructure, canReturn, onAdd, onEdit, onDelete, onReturn,
+}: {
+  row: PpaRowView
+  canEditRow: boolean
+  canModifyStructure: boolean
+  canReturn: boolean
+  onAdd?: (anchor: PpaRowView | null, placement: RowPlacement) => void
+  onEdit?: (row: PpaRowView) => void
+  onDelete?: (row: PpaRowView) => void
+  onReturn?: (row: PpaRowView) => void
+}) {
+  const label = row.row_kind === 'header' ? row.description : `item ${row.item_no}`
+  if (!canEditRow && !canModifyStructure && !canReturn) return null
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" className="size-7"
+                aria-label={`Actions for ${label}`}>
+          <ChevronDown className="size-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        {canModifyStructure ? (
+          <>
+            <DropdownMenuItem onSelect={() => onAdd?.(row, 'above')}>
+              <ArrowUpToLine className="size-4" /> Add row above
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onAdd?.(row, 'below')}>
+              <ArrowDownToLine className="size-4" /> Add row below
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {canEditRow ? (
+          <>
+            {canModifyStructure ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuItem onSelect={() => onEdit?.(row)}>
+              <Pencil className="size-4" /> Edit row
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {canReturn ? (
+          <DropdownMenuItem onSelect={() => onReturn?.(row)}>
+            <Undo2 className="size-4" /> Return to department
+          </DropdownMenuItem>
+        ) : null}
+
+        {canModifyStructure ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => onDelete?.(row)}>
+              <Trash2 className="size-4" /> Delete row
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

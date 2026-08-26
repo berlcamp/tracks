@@ -1,6 +1,7 @@
 // A miniature consolidated AIP with the shapes that actually appear in the real
 // workbook: a department whose rows sit under one heading, a department with a
-// three-level column-C tree, and a second sector.
+// run of consecutive headings (what a three-level column-C tree flattens to,
+// and what the sheet always printed), and a second sector.
 
 import type { AipExportData, AmountSet, PpaRow } from '@/lib/aip/types'
 
@@ -21,8 +22,32 @@ export function ppa(overrides: Partial<PpaRow> & { itemNo: number; description: 
     ccaAmount: null,
     ccmAmount: null,
     ccTypologyCode: null,
-    groupPath: [],
+    rowKind: 'ppa',
     ...overrides,
+  }
+}
+
+/** A column-C caption row. Carries its text and nothing else. */
+export function header(description: string): PpaRow {
+  return {
+    id: `header-${description.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    itemNo: null,
+    refCode: null,
+    description,
+    implementingOffice: null,
+    startDate: null,
+    endDate: null,
+    expectedOutput: null,
+    fundingSource: null,
+    amountPs: 0,
+    amountMooe: 0,
+    amountFe: 0,
+    amountCo: 0,
+    amountTotal: 0,
+    ccaAmount: null,
+    ccmAmount: null,
+    ccTypologyCode: null,
+    rowKind: 'header',
   }
 }
 
@@ -32,6 +57,7 @@ export function amounts(ps = 0, mooe = 0, fe = 0, co = 0): AmountSet {
 
 export function sampleExportData(): AipExportData {
   const cmoRows: PpaRow[] = [
+    header('General and Administrative Operation'),
     ppa({
       itemNo: 1,
       refCode: '1000-000-2-1-01-001-001-001',
@@ -39,7 +65,6 @@ export function sampleExportData(): AipExportData {
       expectedOutput: 'Provided Salaries and Wages',
       amountPs: 86222053,
       amountTotal: 86222053,
-      groupPath: ['General and Administrative Operation'],
     }),
     ppa({
       itemNo: 2,
@@ -47,9 +72,11 @@ export function sampleExportData(): AipExportData {
       description: 'Administrative Cost for Travelling (Local)',
       amountMooe: 7000000,
       amountTotal: 7000000,
-      groupPath: ['General and Administrative Operation'],
     }),
-    // The three-level shape from PUBLIC SERVICES rows 135-137.
+    // PUBLIC SERVICES rows 135-137: three captions in a row, then the item.
+    header('SUPPORT TO NATIONAL AGENCIES'),
+    header('Department of Interior and Local Government'),
+    header('General and Administrative Operation'),
     ppa({
       itemNo: 3,
       refCode: '1000-000-2-1-01-001-001-003',
@@ -57,23 +84,15 @@ export function sampleExportData(): AipExportData {
       amountMooe: 500000,
       amountCo: 2000000,
       amountTotal: 2500000,
-      groupPath: [
-        'SUPPORT TO NATIONAL AGENCIES',
-        'Department of Interior and Local Government',
-        'General and Administrative Operation',
-      ],
     }),
+    header('Commission on Election'),
+    header('General and Administrative Operation'),
     ppa({
       itemNo: 4,
       refCode: '1000-000-2-1-01-001-001-004',
       description: 'Support to COMELEC',
       amountMooe: 300000,
       amountTotal: 300000,
-      groupPath: [
-        'SUPPORT TO NATIONAL AGENCIES',
-        'Commission on Election',
-        'General and Administrative Operation',
-      ],
     }),
   ]
 
@@ -107,6 +126,7 @@ export function sampleExportData(): AipExportData {
             displayName: 'City Planning and Development Services Office (CPDSO)',
             codeNumber: 9,
             rows: [
+              header('General and Administrative Operation'),
               ppa({
                 itemNo: 1,
                 refCode: '1000-000-2-1-09-001-001-001',
@@ -114,7 +134,6 @@ export function sampleExportData(): AipExportData {
                 implementingOffice: 'City Planning and Development Services Office',
                 amountMooe: 13233665,
                 amountTotal: 13233665,
-                groupPath: ['General and Administrative Operation'],
               }),
             ],
             totals: amounts(0, 13233665, 0, 0),
@@ -143,7 +162,6 @@ export function sampleExportData(): AipExportData {
                 amountMooe: 44259528,
                 amountCo: 16300000,
                 amountTotal: 60559528,
-                groupPath: [],
               }),
             ],
             totals: amounts(0, 44259528, 0, 16300000),

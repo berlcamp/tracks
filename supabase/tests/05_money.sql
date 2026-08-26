@@ -169,64 +169,57 @@ select tracks_test.eq(
   '18b. The monitoring view shows the LATEST accomplishment');
 
 -- ---------------------------------------------------------------------------
--- 19. The column-C group tree
+-- 19. Column-C headings and item numbering
 -- ---------------------------------------------------------------------------
+--
+-- Headings are rows now. What used to be a three-level tree is a run of three
+-- consecutive heading rows, which is exactly what the worksheet always printed.
 
 select tracks_test.eq(
-  (select depth from tracks.ppa_groups where id = '80000000-0000-0000-0000-000000000004'),
-  3,
-  '19a. Group depth is derived, not supplied — the 3-level shape survives');
+  (select string_agg(description, ' | ' order by sort_order)
+     from tracks.v_ppa_rows
+    where aip_id = :CMO_AIP::uuid and row_kind = 'header'),
+  'General and Administrative Operation | SUPPORT TO NATIONAL AGENCIES'
+  ' | Department of Interior and Local Government'
+  ' | General and Administrative Operation',
+  '19a. The headings print in document order, nesting flattened to a run');
 
 select tracks_test.eq(
-  (select group_path_label from tracks.v_ppa_rows where id = '90000000-0000-0000-0000-000000000003'),
-  'SUPPORT TO NATIONAL AGENCIES › Department of Interior and Local Government › General and Administrative Operation',
-  '19b. The full column-C ancestry renders for a 3-level PPA');
+  (select count(*)::int from tracks.v_ppa_rows
+    where aip_id = :CMO_AIP::uuid and row_kind = 'header'
+      and sort_order between 4 and 6), 3,
+  '19b. The three headings that were an ancestry sit consecutively above item 3');
 
+select tracks_test.eq(
+  (select count(*)::int from tracks.v_ppa_rows
+    where aip_id = :CMO_AIP::uuid and item_no = 3), 1,
+  '19c. Item numbers run 1..N over the programme, ungapped');
+
+-- Inserting and deleting renumber with no stored column to fix.
 select tracks_test.login(:PLAN_STAFF::uuid);
-select tracks_test.throws(
-  'update tracks.ppa_groups set parent_id = ''80000000-0000-0000-0000-000000000004''
-    where id = ''80000000-0000-0000-0000-000000000002''',
-  '19c. A group cannot be re-parented under its own descendant');
-
-select tracks_test.throws(
-  format('insert into tracks.ppa_groups (aip_id, parent_id, name)
-          values (%L, %L, ''Cross-AIP child'')',
-         '70000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000001'),
-  '19d. A group cannot be nested under a group from another AIP');
-select tracks_test.logout();
-
-select tracks_test.eq(
-  (select count(*)::int from tracks.v_ppa_rows where aip_id = :CMO_AIP::uuid and item_no = 3),
-  1,
-  '19e. Item numbers run 1..N in worksheet order, ungapped');
-
--- Deleting a row renumbers the rest with no write.
-select tracks_test.login(:PLAN_STAFF::uuid);
-insert into tracks.ppas (id, aip_id, department_id, group_id, description, amount_mooe, sort_order)
+insert into tracks.ppas (id, aip_id, department_id, description, amount_mooe, sort_order)
 values ('90000000-0000-0000-0000-00000000000f', :CMO_AIP::uuid,
-        'd0000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001',
-        'Inserted between rows', 1000, 0);
+        'd0000000-0000-0000-0000-000000000001', 'Inserted between rows', 1000, 0);
 select tracks_test.eq(
-  (select item_no::int from tracks.v_ppa_rows where id = '90000000-0000-0000-0000-00000000000f'),
-  1,
-  '19f. A row inserted at the top takes item 1 and pushes the rest down');
+  (select item_no::int from tracks.v_ppa_rows
+    where id = '90000000-0000-0000-0000-00000000000f'), 1,
+  '19d. A row placed before every other takes item 1 and pushes the rest down');
 delete from tracks.ppas where id = '90000000-0000-0000-0000-00000000000f';
 select tracks_test.eq(
-  (select item_no::int from tracks.v_ppa_rows where id = :PPA_1::uuid),
-  1,
-  '19g. Deleting it renumbers back, with no stored column to fix');
-select tracks_test.logout();
+  (select item_no::int from tracks.v_ppa_rows where id = :PPA_1::uuid), 1,
+  '19e. Deleting it renumbers back, with no stored column to fix');
 
--- An ungrouped row must NOT jump to the top of a department that already has
--- column-C headings. Regression for 0008.
-select tracks_test.login(:PLAN_STAFF::uuid);
-insert into tracks.ppas (id, aip_id, department_id, group_id, description, amount_mooe, sort_order)
+-- A row appended after the headings must land at the end, not the top. The
+-- regression 0008 was written for: it now falls out of one sort_order line.
+insert into tracks.ppas (id, aip_id, department_id, description, amount_mooe, sort_order)
 values ('90000000-0000-0000-0000-0000000000e1', :CMO_AIP::uuid,
-        'd0000000-0000-0000-0000-000000000001', null, 'Ungrouped row added later', 1000, 99);
+        'd0000000-0000-0000-0000-000000000001', 'Row added later', 1000, 99);
 select tracks_test.eq(
-  (select item_no::int from tracks.v_ppa_rows where id = '90000000-0000-0000-0000-0000000000e1'),
-  (select count(*)::int from tracks.v_ppa_rows where aip_id = :CMO_AIP::uuid),
-  '19h. A row with no column-C heading appends to the end, not the top');
+  (select item_no::int from tracks.v_ppa_rows
+    where id = '90000000-0000-0000-0000-0000000000e1'),
+  (select count(*)::int from tracks.v_ppa_rows
+    where aip_id = :CMO_AIP::uuid and row_kind = 'ppa'),
+  '19f. A row added later appends to the end, not the top');
 delete from tracks.ppas where id = '90000000-0000-0000-0000-0000000000e1';
 select tracks_test.logout();
 

@@ -53,30 +53,32 @@ insert into tracks.aips (id, period_id, department_id, kind, status) values
   ('70000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'annual', 'draft'),
   ('70000000-0000-0000-0000-000000000002', '60000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000003', 'annual', 'draft');
 
--- The three-level shape from PUBLIC SERVICES rows 135-137, plus the flat
--- one-level shape from row 13. Both must round-trip.
-insert into tracks.ppa_groups (id, aip_id, parent_id, name, sort_order) values
-  ('80000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', null, 'General and Administrative Operation', 1),
-  ('80000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000001', null, 'SUPPORT TO NATIONAL AGENCIES', 2),
-  ('80000000-0000-0000-0000-000000000003', '70000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000002', 'Department of Interior and Local Government', 1),
-  ('80000000-0000-0000-0000-000000000004', '70000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000003', 'General and Administrative Operation', 1);
+-- Column-C headings. What was a three-level tree in the source workbook is a
+-- run of consecutive heading rows here: the worksheet never showed the nesting,
+-- so the flat sequence IS the shape. Sort order interleaves them with the PPA
+-- rows on one line, which is what makes "insert below this row" unambiguous.
+insert into tracks.ppas (id, aip_id, department_id, row_kind, description, sort_order) values
+  ('80000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'header', 'General and Administrative Operation', 1),
+  ('80000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'header', 'SUPPORT TO NATIONAL AGENCIES', 4),
+  ('80000000-0000-0000-0000-000000000003', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'header', 'Department of Interior and Local Government', 5),
+  ('80000000-0000-0000-0000-000000000004', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'header', 'General and Administrative Operation', 6);
 
-insert into tracks.ppas (id, aip_id, department_id, group_id, ref_code, description,
+insert into tracks.ppas (id, aip_id, department_id, ref_code, description,
                          implementing_office, start_date, end_date, expected_output,
                          funding_source, amount_ps, amount_mooe, amount_fe, amount_co, sort_order) values
-  ('90000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001',
+  ('90000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
    '1000-000-2-1-01-001-001-001', 'Administrative Cost for Salaries, Wages, and Benefits',
    'City Mayor''s Office', '2027-01-01', '2027-12-31', 'Provided Salaries and Wages', 'GF',
-   86222053.00, 0, 0, 0, 1),
-  ('90000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001',
+   86222053.00, 0, 0, 0, 2),
+  ('90000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
    '1000-000-2-1-01-001-001-002', 'Administrative Cost for Travelling (Local)',
    'City Mayor''s Office', '2027-01-01', '2027-12-31', 'Provided Allocation for Transportation', 'GF',
-   0, 7000000.00, 0, 0, 2),
-  ('90000000-0000-0000-0000-000000000003', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000004',
+   0, 7000000.00, 0, 0, 3),
+  ('90000000-0000-0000-0000-000000000003', '70000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001',
    '1000-000-2-1-01-001-001-003', 'Support to DILG Programs',
    'City Mayor''s Office', '2027-01-01', '2027-12-31', 'Supported DILG activities', 'GF',
-   0, 500000.00, 0, 2000000.00, 1),
-  ('90000000-0000-0000-0000-000000000004', '70000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000003', null,
+   0, 500000.00, 0, 2000000.00, 7),
+  ('90000000-0000-0000-0000-000000000004', '70000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000003',
    '1000-000-2-3-11-001-001-001', 'Acquisition of Medical Supplies',
    'City Health Office', '2027-01-01', '2027-12-31', 'Procured medical supplies', 'GF',
    0, 44259528.00, 0, 16300000.00, 1);

@@ -1,6 +1,6 @@
 // The grid's layout must agree with the exported workbook's layout — same band
-// rows, same group rows, same subtotal placement. These are the assertions that
-// keep the screen and the printout from drifting apart.
+// rows, same heading rows, same subtotal placement. These are the assertions
+// that keep the screen and the printout from drifting apart.
 
 import { describe, expect, it } from 'vitest'
 import { buildGrid, filterRows, type GridRow } from '@/lib/aip/grid-model'
@@ -15,12 +15,12 @@ function row(overrides: Partial<PpaRowView> & { id: string }): PpaRowView {
     sector_id: 'sec-public', sector_code: 'PUBLIC',
     sector_heading: 'GENERAL PUBLIC SECTOR', sector_sheet_name: 'PUBLIC SERVICES Sector',
     sector_sort: 1,
-    group_id: null, group_path: [], group_path_label: null,
+    row_kind: 'ppa',
     item_no: 1, ref_code: null, description: 'A PPA', implementing_office: null,
     start_date: null, end_date: null, expected_output: null, funding_source: 'GF',
     amount_ps: 0, amount_mooe: 1000, amount_fe: 0, amount_co: 0, amount_total: 1000,
     cca_amount: null, ccm_amount: null, cc_typology_code: null,
-    continues_ppa_id: null, sort_order: 1, group_sort_path: [0, 0, 0, 0],
+    continues_ppa_id: null, sort_order: 1,
     open_return_id: null, open_return_reason: null, open_return_at: null,
     is_returned: false,
     ...overrides,
@@ -29,28 +29,43 @@ function row(overrides: Partial<PpaRowView> & { id: string }): PpaRowView {
 
 const kinds = (grid: GridRow[]) => grid.map((r) => r.kind)
 
+/** A column-C caption row. */
+function header(id: string, description: string, overrides: Partial<PpaRowView> = {}) {
+  return row({ id, description, row_kind: 'header', item_no: null,
+               amount_mooe: 0, amount_total: 0, ...overrides })
+}
+
 describe('buildGrid', () => {
   it('opens with the sector band, then the department band, then data', () => {
     const grid = buildGrid([row({ id: '1' })])
     expect(kinds(grid)).toEqual(['sector', 'department', 'ppa', 'departmentTotal', 'sectorTotal'])
   })
 
-  it('emits a group row only when the column-C ancestry changes', () => {
+  it('prints headings where they sit in the document, in order', () => {
     const grid = buildGrid([
-      row({ id: '1', group_path: ['GAO'] }),
-      row({ id: '2', group_path: ['GAO'] }),
-      row({ id: '3', group_path: ['NATIONAL AGENCIES', 'DILG', 'GAO'] }),
-      row({ id: '4', group_path: ['NATIONAL AGENCIES', 'COMELEC', 'GAO'] }),
+      header('h1', 'GAO', { sort_order: 1 }),
+      row({ id: '1', sort_order: 2 }),
+      row({ id: '2', sort_order: 3 }),
+      header('h2', 'NATIONAL AGENCIES', { sort_order: 4 }),
+      header('h3', 'DILG', { sort_order: 5 }),
+      row({ id: '3', sort_order: 6 }),
     ])
-    const groups = grid.filter((r) => r.kind === 'group')
-    expect(groups.map((g) => `${g.depth}:${g.name}`)).toEqual([
-      '1:GAO',
-      '1:NATIONAL AGENCIES',
-      '2:DILG',
-      '3:GAO',
-      '2:COMELEC',
-      '3:GAO',
+    expect(grid.filter((r) => r.kind === 'group').map((g) => g.name))
+      .toEqual(['GAO', 'NATIONAL AGENCIES', 'DILG'])
+    expect(kinds(grid)).toEqual([
+      'sector', 'department',
+      'group', 'ppa', 'ppa', 'group', 'group', 'ppa',
+      'departmentTotal', 'sectorTotal',
     ])
+  })
+
+  it('leaves a heading out of the subtotals — a caption carries no money', () => {
+    const grid = buildGrid([
+      header('h1', 'GAO', { sort_order: 1 }),
+      row({ id: '1', sort_order: 2, amount_mooe: 1000, amount_total: 1000 }),
+    ])
+    const total = grid.find((r) => r.kind === 'departmentTotal')
+    expect(total).toMatchObject({ totals: { mooe: 1000, total: 1000 } })
   })
 
   it('closes each department before the next one starts', () => {
@@ -107,8 +122,7 @@ describe('buildGrid', () => {
 describe('filterRows', () => {
   const rows = [
     row({ id: '1', description: 'Acquisition of Office Supplies', funding_source: 'GF' }),
-    row({ id: '2', description: 'Construction of Road', funding_source: '20% CDF',
-          group_path: ['Infrastructure Development Program'] }),
+    row({ id: '2', description: 'Construction of Road', funding_source: '20% CDF' }),
     row({ id: '3', ref_code: '8000-000-2-1-10-001-001-003', description: 'Drainage' }),
   ]
 
@@ -120,9 +134,28 @@ describe('filterRows', () => {
     expect(filterRows(rows, 'road').map((r) => r.id)).toEqual(['2'])
   })
 
-  it('matches the funding source and the column-C group name', () => {
+  it('matches the funding source', () => {
     expect(filterRows(rows, '20% cdf').map((r) => r.id)).toEqual(['2'])
-    expect(filterRows(rows, 'infrastructure').map((r) => r.id)).toEqual(['2'])
+  })
+
+  it('drops a heading the filter has emptied, and keeps one it has not', () => {
+    const withHeadings = [
+      header('h1', 'ROADS', { sort_order: 1 }),
+      row({ id: '1', description: 'Construction of Road', sort_order: 2 }),
+      header('h2', 'SUPPLIES', { sort_order: 3 }),
+      row({ id: '2', description: 'Acquisition of Office Supplies', sort_order: 4 }),
+    ]
+    // "road" keeps the ROADS heading (its row survives) and drops SUPPLIES,
+    // which would otherwise stand over nothing.
+    expect(filterRows(withHeadings, 'road').map((r) => r.id)).toEqual(['h1', '1'])
+  })
+
+  it('keeps a heading that matches the search even with nothing under it', () => {
+    const withHeadings = [
+      header('h1', 'TECH4ED', { sort_order: 1 }),
+      row({ id: '1', description: 'Acquisition of Office Supplies', sort_order: 2 }),
+    ]
+    expect(filterRows(withHeadings, 'tech4ed').map((r) => r.id)).toEqual(['h1'])
   })
 
   it('matches the AIP reference code', () => {

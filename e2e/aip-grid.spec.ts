@@ -8,7 +8,7 @@ test.describe('the AIP grid', () => {
   })
 
   test('lays the worksheet out the way the office reads it', async ({ page }) => {
-    // Sector band, then department heading, then the column-C group row.
+    // Sector band, then department band, then the column-C heading row.
     await expect(
       page.getByRole('cell', { name: 'GENERAL PUBLIC SECTOR', exact: true })).toBeVisible()
     await expect(
@@ -36,10 +36,13 @@ test.describe('the AIP grid', () => {
     await expect(page.getByText('Acquisition of Office Supplies')).toBeVisible()
   })
 
-  test('adds a row through the modal and renumbers without a page reload', async ({ page }) => {
+  test('adds a row below the one you clicked, and renumbers without a reload',
+    async ({ page }) => {
     const description = `E2E test item ${Date.now()}`
 
-    await page.getByRole('button', { name: 'Add row' }).click()
+    // Rows are added the way a spreadsheet adds them: from the row you are on.
+    await page.getByRole('button', { name: /^Actions for item 1$/ }).click()
+    await page.getByRole('menuitem', { name: 'Add row below' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 
@@ -52,6 +55,26 @@ test.describe('the AIP grid', () => {
     await dialog.getByRole('button', { name: 'Add item' }).click()
     await expect(dialog).toBeHidden({ timeout: 30_000 })
     await expect(page.getByText(description)).toBeVisible({ timeout: 30_000 })
+  })
+
+  test('adds a column-C heading, which takes no item number', async ({ page }) => {
+    const caption = `E2E HEADING ${Date.now()}`
+
+    await page.getByRole('button', { name: /^Actions for item 1$/ }).click()
+    await page.getByRole('menuitem', { name: 'Add row above' }).click()
+    const dialog = page.getByRole('dialog')
+
+    await dialog.getByLabel('Row type').click()
+    await page.getByRole('option', { name: /PPA header/ }).click()
+
+    // A heading carries its text and nothing else — the money fields are gone.
+    await expect(dialog.getByLabel(/Personal Services/)).toHaveCount(0)
+    await dialog.getByLabel(/^Heading/).fill(caption)
+    await dialog.getByRole('button', { name: 'Add heading' }).click()
+
+    await expect(dialog).toBeHidden({ timeout: 30_000 })
+    const headingRow = page.getByRole('row').filter({ hasText: caption })
+    await expect(headingRow).toBeVisible({ timeout: 30_000 })
   })
 
   test('exports the department workbook', async ({ page }) => {

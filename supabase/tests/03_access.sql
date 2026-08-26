@@ -42,14 +42,17 @@ select tracks_test.logout();
 -- ---------------------------------------------------------------------------
 
 select tracks_test.login(:CMO_ENC::uuid);
-select tracks_test.eq((select count(*) from tracks.ppas)::int, 4,
+select tracks_test.eq(
+  (select count(*) from tracks.ppas where row_kind = 'ppa')::int, 4,
   '2a. A department encoder can READ every department''s PPAs');
-select tracks_test.eq((select count(*) from tracks.v_ppa_rows)::int, 4,
+select tracks_test.eq(
+  (select count(*) from tracks.v_ppa_rows where row_kind = 'ppa')::int, 4,
   '2b. The worksheet view is readable by a department user');
 select tracks_test.logout();
 
 select tracks_test.login(:BUDGET::uuid);
-select tracks_test.eq((select count(*) from tracks.ppas)::int, 4,
+select tracks_test.eq(
+  (select count(*) from tracks.ppas where row_kind = 'ppa')::int, 4,
   '2c. Budget reads the whole programme');
 select tracks_test.logout();
 
@@ -146,14 +149,22 @@ select tracks_test.logout();
 -- No DELETE or UPDATE policy exists on these tables, so the statement is not
 -- rejected — it simply matches nothing. Assert on the surviving rows, which is
 -- what actually protects the history.
+-- Snapshot rather than a literal: headings are ppas rows now, so they carry
+-- revision history too — a City Planning rewrite of a department's column-C
+-- caption is on the record like any other overwrite. What this test is about is
+-- that the delete changes nothing, not how many rows happen to exist.
 select tracks_test.login(:PLAN_ADMIN::uuid);
+create temporary table _revisions_before as
+  select count(*) as n from tracks.ppa_revisions;
 delete from tracks.ppa_revisions;
 update tracks.audit_logs set action = 'TAMPERED';
 select tracks_test.logout();
 
 select tracks_test.ok(
-  (select count(*) from tracks.ppa_revisions) = 4,
+  (select count(*) from tracks.ppa_revisions) = (select n from _revisions_before)
+  and (select n from _revisions_before) > 0,
   '6a. Even a planning admin cannot delete revision history');
+drop table _revisions_before;
 select tracks_test.eq(
   (select count(*) from tracks.audit_logs where action = 'TAMPERED')::int, 0,
   '6b. Even a planning admin cannot rewrite the audit log');

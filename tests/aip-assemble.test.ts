@@ -16,7 +16,7 @@ function row(overrides: Partial<PpaRowSource> & { id: string }): PpaRowSource {
     fundingSource: null,
     amountPs: 0, amountMooe: 1000, amountFe: 0, amountCo: 0, amountTotal: 1000,
     ccaAmount: null, ccmAmount: null, ccTypologyCode: null,
-    groupPath: [],
+    rowKind: 'ppa',
     sectorId: 'sec-public', sectorCode: 'PUBLIC', sectorHeading: 'GENERAL PUBLIC SECTOR',
     sectorSheetName: 'PUBLIC SERVICES Sector', sectorSummaryLabel: 'GOVERNANCE SECTOR',
     sectorSort: 1,
@@ -104,11 +104,11 @@ describe('assembleExportData', () => {
   it('drops the join columns from the exported rows', () => {
     const data = assembleExportData({
       ...base,
-      rows: [row({ id: '1', groupPath: ['A', 'B'] })],
+      rows: [row({ id: '1', rowKind: 'header', description: 'A CAPTION' })],
       departmentTotals: [], sectorTotals: [], grandTotals: amounts(),
     })
     const exported = data.sectors[0]!.departments[0]!.rows[0]!
-    expect(exported.groupPath).toEqual(['A', 'B'])
+    expect(exported.rowKind).toBe('header')
     expect(exported).not.toHaveProperty('sectorId')
     expect(exported).not.toHaveProperty('departmentSort')
   })

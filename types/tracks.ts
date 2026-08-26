@@ -72,14 +72,9 @@ export interface Aip {
   accepted_at: string | null
 }
 
-export interface PpaGroup {
-  id: string
-  aip_id: string
-  parent_id: string | null
-  name: string
-  depth: number
-  sort_order: number
-}
+/** Column C is a caption row, not a container: 'header' rows carry a
+ *  description and nothing else. */
+export type PpaRowKind = 'ppa' | 'header'
 
 /** A row of tracks.v_ppa_rows. */
 export interface PpaRowView {
@@ -99,10 +94,9 @@ export interface PpaRowView {
   sector_heading: string
   sector_sheet_name: string
   sector_sort: number
-  group_id: string | null
-  group_path: string[] | null
-  group_path_label: string | null
-  item_no: number
+  row_kind: PpaRowKind
+  /** null on a header — a caption takes no number and consumes none. */
+  item_no: number | null
   ref_code: string | null
   description: string
   implementing_office: string | null
@@ -120,7 +114,6 @@ export interface PpaRowView {
   cc_typology_code: string | null
   continues_ppa_id: string | null
   sort_order: number
-  group_sort_path: number[]
   open_return_id: string | null
   open_return_reason: string | null
   open_return_at: string | null

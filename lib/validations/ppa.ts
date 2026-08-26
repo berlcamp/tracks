@@ -20,8 +20,7 @@ const optionalText = z.string().trim().max(2000).optional()
 export const ppaSchema = z
   .object({
     aipId: z.uuid(),
-    groupId: z.union([z.uuid(), z.literal('')]).optional()
-      .transform((value) => (value ? value : null)),
+    rowKind: z.enum(['ppa', 'header']).default('ppa'),
     refCode: optionalText,
     description: z.string().trim().min(1, 'A description is required').max(2000),
     implementingOffice: optionalText,
@@ -36,42 +35,21 @@ export const ppaSchema = z
     amountFe: amount,
     amountCo: amount,
   })
-  .refine((v) => v.amountPs + v.amountMooe + v.amountFe + v.amountCo > 0, {
-    message: 'Enter an amount in at least one expense class',
-    path: ['amountMooe'],
-  })
+  // A heading is a caption: it carries a description and nothing else, which is
+  // the same rule ppas_header_is_caption_only enforces in the database.
+  .refine(
+    (v) => v.rowKind === 'header'
+      || v.amountPs + v.amountMooe + v.amountFe + v.amountCo > 0,
+    { message: 'Enter an amount in at least one expense class', path: ['amountMooe'] })
   .refine((v) => !v.startDate || !v.endDate || v.endDate >= v.startDate, {
     message: 'Completion cannot be before the start',
     path: ['endDate'],
   })
 
+/** Where a new row goes: beside an existing one, or at the end. */
+export const insertRowSchema = z.object({
+  relativeToId: z.uuid().optional(),
+  placement: z.enum(['above', 'below', 'end']),
+})
+
 export type PpaInput = z.infer<typeof ppaSchema>
-
-export const groupSchema = z.object({
-  aipId: z.uuid(),
-  parentId: z.union([z.uuid(), z.literal('')]).optional()
-    .transform((value) => (value ? value : null)),
-  name: z.string().trim().min(1, 'A name is required').max(300),
-})
-
-/** Rename keeps the heading where it is in the tree; only the caption changes. */
-export const renameGroupSchema = z.object({
-  aipId: z.uuid(),
-  groupId: z.uuid(),
-  name: z.string().trim().min(1, 'A name is required').max(300),
-})
-
-/** Reparent. An empty parentId promotes the heading to the top level. The
- *  database refuses a cycle and a move that would breach the depth cap; this
- *  only rejects the one case it can see for itself. */
-export const moveGroupSchema = z
-  .object({
-    aipId: z.uuid(),
-    groupId: z.uuid(),
-    parentId: z.union([z.uuid(), z.literal('')]).optional()
-      .transform((value) => (value ? value : null)),
-  })
-  .refine((v) => v.parentId !== v.groupId, {
-    message: 'A heading cannot be filed under itself',
-    path: ['parentId'],
-  })

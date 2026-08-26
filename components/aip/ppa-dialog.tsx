@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/select'
 import { createPpa, updatePpa } from '@/app/actions/ppa'
 import { moneyTotal } from '@/lib/format'
-import type { PpaGroup, PpaRowView } from '@/types/tracks'
+import type { PpaRowKind, PpaRowView } from '@/types/tracks'
+import type { RowPlacement } from './aip-grid'
 
 /**
  * Add/edit a PPA.
@@ -27,15 +28,16 @@ import type { PpaGroup, PpaRowView } from '@/types/tracks'
 
 export interface PpaDialogProps {
   aipId: string
-  groups: PpaGroup[]
   /** null opens the dialog in "add" mode. */
   row: PpaRowView | null
+  /** Add mode: which row the new one goes beside, and on which side. */
+  anchor?: PpaRowView | null
+  placement?: RowPlacement
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
 interface FormState {
-  groupId: string
   refCode: string
   description: string
   implementingOffice: string
@@ -50,16 +52,13 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-  groupId: '', refCode: '', description: '', implementingOffice: '',
+  refCode: '', description: '', implementingOffice: '',
   startDate: '', endDate: '', expectedOutput: '', fundingSource: '',
   amountPs: '', amountMooe: '', amountFe: '', amountCo: '',
 }
 
-const NO_GROUP = '__none__'
-
 function fromRow(row: PpaRowView): FormState {
   return {
-    groupId: row.group_id ?? '',
     refCode: row.ref_code ?? '',
     description: row.description,
     implementingOffice: row.implementing_office ?? '',
@@ -84,16 +83,19 @@ function numberField(value: number | string): string {
  * being edited changes. Resetting fields from an effect instead would set state
  * synchronously during the commit and cascade an extra render on every open.
  */
-export function PpaDialog({ aipId, groups, row, open, onOpenChange }: PpaDialogProps) {
+export function PpaDialog({
+  aipId, row, anchor, placement = 'end', open, onOpenChange,
+}: PpaDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-3xl">
         {open ? (
           <PpaForm
-            key={row?.id ?? 'new'}
+            key={row?.id ?? `new-${anchor?.id ?? 'end'}-${placement}`}
             aipId={aipId}
-            groups={groups}
             row={row}
+            anchor={anchor}
+            placement={placement}
             onOpenChange={onOpenChange}
           />
         ) : null}
@@ -102,8 +104,13 @@ export function PpaDialog({ aipId, groups, row, open, onOpenChange }: PpaDialogP
   )
 }
 
-function PpaForm({ aipId, groups, row, onOpenChange }: Omit<PpaDialogProps, 'open'>) {
+function PpaForm({
+  aipId, row, anchor, placement = 'end', onOpenChange,
+}: Omit<PpaDialogProps, 'open'>) {
   const [form, setForm] = useState<FormState>(() => (row ? fromRow(row) : EMPTY))
+  // Editing keeps the row's own kind; adding asks, because the two are
+  // different documents: a line of the programme, or the caption above it.
+  const [kind, setKind] = useState<PpaRowKind>(row?.row_kind ?? 'ppa')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -124,7 +131,13 @@ function PpaForm({ aipId, groups, row, onOpenChange }: Omit<PpaDialogProps, 'ope
     event.preventDefault()
     setError(null)
 
-    const payload = { aipId, ...form, groupId: form.groupId === NO_GROUP ? '' : form.groupId }
+    const payload = {
+      aipId,
+      ...form,
+      rowKind: kind,
+      relativeToId: anchor?.id,
+      placement: anchor ? placement : 'end',
+    }
 
     startTransition(async () => {
       const result = row
@@ -135,7 +148,8 @@ function PpaForm({ aipId, groups, row, onOpenChange }: Omit<PpaDialogProps, 'ope
         setError(result.error)
         return
       }
-      toast.success(row ? 'Item updated.' : 'Item added.')
+      const noun = kind === 'header' ? 'Heading' : 'Item'
+      toast.success(row ? `${noun} updated.` : `${noun} added.`)
       onOpenChange(false)
     })
   }
@@ -143,43 +157,60 @@ function PpaForm({ aipId, groups, row, onOpenChange }: Omit<PpaDialogProps, 'ope
   return (
     <>
         <DialogHeader>
-          <DialogTitle>{row ? 'Edit item' : 'Add item'}</DialogTitle>
+          <DialogTitle>
+            {row
+              ? (kind === 'header' ? 'Edit heading' : 'Edit item')
+              : (kind === 'header' ? 'Add heading' : 'Add item')}
+          </DialogTitle>
           <DialogDescription>
             {row?.is_returned
               ? `Returned by City Planning: ${row.open_return_reason}`
-              : 'Columns (1) through (12) of the AIP form.'}
+              : kind === 'header'
+                ? 'A caption in column C. It carries its text and nothing else — no '
+                  + 'dates, no office, no money.'
+                : 'Columns (1) through (12) of the AIP form.'}
+            {!row && anchor ? (
+              <span className="mt-1 block">
+                Going {placement} {anchor.row_kind === 'header'
+                  ? `“${anchor.description}”`
+                  : `item ${anchor.item_no}`}.
+              </span>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="grid gap-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          {row ? null : (
+            <Field label="Row type" htmlFor="row-kind">
+              <Select value={kind} onValueChange={(value) => setKind(value as PpaRowKind)}>
+                <SelectTrigger id="row-kind"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ppa">PPA row — a line of the programme</SelectItem>
+                  <SelectItem value="header">PPA header — a caption in column C</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          {kind === 'ppa' ? (
             <Field label="AIP Ref. Code" htmlFor="ppa-ref-code" hint="(1)">
               <Input id="ppa-ref-code" value={form.refCode} onChange={set('refCode')}
                      placeholder="1000-000-2-1-01-001-001-001" className="font-mono" />
             </Field>
-            <Field label="Column-C grouping" htmlFor="ppa-group">
-              <Select
-                value={form.groupId || NO_GROUP}
-                onValueChange={(value) =>
-                  setForm((c) => ({ ...c, groupId: value === NO_GROUP ? '' : value }))}
-              >
-                <SelectTrigger id="ppa-group"><SelectValue placeholder="No grouping" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_GROUP}>No grouping</SelectItem>
-                  {groups.map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {'— '.repeat(Math.max(0, group.depth - 1))}{group.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+          ) : null}
 
-          <Field label="Program / Project / Activity Description" htmlFor="ppa-description" hint="(2)" required>
-            <Textarea id="ppa-description" value={form.description} onChange={set('description')} rows={2} required />
+          <Field
+            label={kind === 'header' ? 'Heading' : 'Program / Project / Activity Description'}
+            htmlFor="ppa-description"
+            hint={kind === 'header' ? undefined : '(2)'}
+            required
+          >
+            <Textarea id="ppa-description" value={form.description}
+                      onChange={set('description')} rows={2} required />
           </Field>
 
+          {kind === 'ppa' ? (
+            <>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Implementing Office" htmlFor="ppa-office" hint="(3)">
               <Input id="ppa-office" value={form.implementingOffice} onChange={set('implementingOffice')} />
@@ -225,6 +256,8 @@ function PpaForm({ aipId, groups, row, onOpenChange }: Omit<PpaDialogProps, 'ope
               </span>
             </div>
           </fieldset>
+            </>
+          ) : null}
 
           {error ? (
             <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -237,7 +270,11 @@ function PpaForm({ aipId, groups, row, onOpenChange }: Omit<PpaDialogProps, 'ope
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? 'Saving…' : row ? 'Save changes' : 'Add item'}
+              {pending
+                ? 'Saving…'
+                : row
+                  ? 'Save changes'
+                  : kind === 'header' ? 'Add heading' : 'Add item'}
             </Button>
           </DialogFooter>
         </form>

@@ -5,7 +5,8 @@
 /** One PPA row — column (1) through (15) of the official form. */
 export interface PpaRow {
   id: string
-  itemNo: number
+  /** null on a heading — column (2) numbers the programme, not the page. */
+  itemNo: number | null
   refCode: string | null
   description: string
   implementingOffice: string | null
@@ -21,9 +22,9 @@ export interface PpaRow {
   ccaAmount: number | null
   ccmAmount: number | null
   ccTypologyCode: string | null
-  /** Ancestry in column C, outermost first. Empty when the row sits directly
-   *  under its department. */
-  groupPath: string[]
+  /** 'header' is a column-C caption: description only, printed bold across
+   *  column 3 with no number and no money. */
+  rowKind: 'ppa' | 'header'
 }
 
 export interface DepartmentBlock {

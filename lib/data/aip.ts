@@ -6,7 +6,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type {
-  Aip, AipPeriod, AipTotals, Department, PeriodTotals, PpaGroup, PpaRowView,
+  Aip, AipPeriod, AipTotals, Department, PeriodTotals, PpaRowView,
   SectorTotals,
 } from '@/types/tracks'
 
@@ -62,7 +62,6 @@ export interface AipDetail {
   period: AipPeriod
   department: Department
   rows: PpaRowView[]
-  groups: PpaGroup[]
   totals: AipTotals | null
   /**
    * The department's other submissions for this period: the annual one and any
@@ -80,13 +79,12 @@ export async function getAipDetail(aipId: string): Promise<AipDetail | null> {
   if (!aip) return null
 
   const [
-    { data: period }, { data: department }, { data: rows }, { data: groups },
+    { data: period }, { data: department }, { data: rows },
     { data: totals }, { data: siblings },
   ] = await Promise.all([
     supabase.from('aip_periods').select('*').eq('id', aip.period_id).maybeSingle<AipPeriod>(),
     supabase.from('departments').select('*').eq('id', aip.department_id).maybeSingle<Department>(),
     supabase.from('v_ppa_rows').select('*').eq('aip_id', aipId),
-    supabase.from('ppa_groups').select('*').eq('aip_id', aipId).order('sort_order'),
     supabase.from('v_aip_totals').select('*').eq('aip_id', aipId).maybeSingle<AipTotals>(),
     supabase.from('v_aip_totals').select('*')
       .eq('period_id', aip.period_id).eq('department_id', aip.department_id),
@@ -99,7 +97,6 @@ export async function getAipDetail(aipId: string): Promise<AipDetail | null> {
     period,
     department,
     rows: sortWorksheet((rows ?? []) as PpaRowView[]),
-    groups: (groups ?? []) as PpaGroup[],
     totals: totals ?? null,
     siblings: sortSubmissions((siblings ?? []) as AipTotals[]),
   }
@@ -121,24 +118,16 @@ export function submissionLabel(
     : 'Annual Investment Program'
 }
 
-/** Worksheet order: sector, department, then the column-C tree, then the row. */
+/**
+ * Worksheet order: sector, department, then one sort_order line per AIP that
+ * headings and rows share. There is no third key — that shared line is what
+ * makes "insert below this row" mean the same thing wherever it is clicked.
+ */
 export function sortWorksheet(rows: PpaRowView[]): PpaRowView[] {
   return [...rows].sort((a, b) =>
     a.sector_sort - b.sector_sort ||
     a.department_sort - b.department_sort ||
-    comparePath(a.group_sort_path, b.group_sort_path) ||
     a.sort_order - b.sort_order)
-}
-
-function comparePath(a: number[] | null, b: number[] | null): number {
-  const left = a ?? []
-  const right = b ?? []
-  const length = Math.max(left.length, right.length)
-  for (let i = 0; i < length; i++) {
-    const diff = (left[i] ?? 0) - (right[i] ?? 0)
-    if (diff !== 0) return diff
-  }
-  return 0
 }
 
 export interface ConsolidatedView {

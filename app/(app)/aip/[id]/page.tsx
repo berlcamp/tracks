@@ -30,7 +30,6 @@ export default async function AipPage({ params }: { params: Promise<{ id: string
       period={detail.period}
       department={detail.department}
       rows={detail.rows}
-      groups={detail.groups}
       siblings={detail.siblings}
       ctx={ctx}
     />

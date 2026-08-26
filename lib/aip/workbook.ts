@@ -207,30 +207,18 @@ function writeDepartmentBand(ws: ExcelJS.Worksheet, row: number, displayName: st
 }
 
 /**
- * Emits the group rows (column C) and the PPA rows beneath them. A group row is
- * written only when the ancestry actually changes, so a department whose rows all
- * sit under one heading gets one heading — which is what makes the printed sheet
- * match the workbook the office already knows.
+ * Emits the department's rows in document order. A heading is a row like any
+ * other — it carries a description and nothing else — so this walks one list
+ * rather than reconstructing captions from an ancestry.
  */
 function writeDepartmentRows(ws: ExcelJS.Worksheet, startRow: number, dept: DepartmentBlock): number {
   let row = startRow
-  let previous: string[] = []
-
   for (const ppa of dept.rows) {
-    const path = ppa.groupPath
-    for (let depth = 0; depth < path.length; depth++) {
-      if (previous[depth] === path[depth] && samePrefix(previous, path, depth)) continue
-      row = writeGroupRow(ws, row, path[depth] ?? '')
-    }
-    previous = path
-    row = writePpaRow(ws, row, ppa)
+    row = ppa.rowKind === 'header'
+      ? writeGroupRow(ws, row, ppa.description)
+      : writePpaRow(ws, row, ppa)
   }
   return row
-}
-
-function samePrefix(a: string[], b: string[], depth: number): boolean {
-  for (let i = 0; i < depth; i++) if (a[i] !== b[i]) return false
-  return true
 }
 
 function writeGroupRow(ws: ExcelJS.Worksheet, row: number, name: string): number {

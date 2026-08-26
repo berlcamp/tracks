@@ -72,7 +72,8 @@ on conflict (year) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- One department AIP with real rows, so the grid, the totals and the export
--- have something to render on a fresh database.
+-- have something to render on a fresh database. The first row is a column-C
+-- heading: a caption carrying its text and nothing else.
 -- ---------------------------------------------------------------------------
 
 with per as (select id from tracks.aip_periods where year = 2027),
@@ -82,36 +83,38 @@ select per.id, dep.id, 'annual', 'draft' from per, dep
 on conflict do nothing;
 
 with a as (
-  select a.id from tracks.aips a
-  join tracks.departments d on d.id = a.department_id
-  join tracks.aip_periods p on p.id = a.period_id
-  where d.code = 'CMO' and p.year = 2027 and a.kind = 'annual'
-)
-insert into tracks.ppa_groups (aip_id, parent_id, name, sort_order)
-select a.id, null, 'General and Administrative Operation', 1 from a
-where not exists (select 1 from tracks.ppa_groups g where g.aip_id = (select id from a));
-
-with a as (
   select a.id as aip_id, a.department_id from tracks.aips a
   join tracks.departments d on d.id = a.department_id
   join tracks.aip_periods p on p.id = a.period_id
   where d.code = 'CMO' and p.year = 2027 and a.kind = 'annual'
-),
-g as (select id from tracks.ppa_groups where aip_id = (select aip_id from a) limit 1)
-insert into tracks.ppas (aip_id, department_id, group_id, ref_code, description,
+)
+insert into tracks.ppas (aip_id, department_id, row_kind, description,
                          implementing_office, start_date, end_date, expected_output,
-                         funding_source, amount_ps, amount_mooe, amount_fe, amount_co, sort_order)
-select a.aip_id, a.department_id, g.id, v.ref_code, v.description,
-       'City Mayor''s Office', date '2027-01-01', date '2027-12-31', v.expected_output,
-       'GF', v.ps, v.mooe, 0, v.co, v.sort_order
-from a, g, (values
-  ('1000-000-2-1-01-001-001-001', 'Administrative Cost for Salaries, Wages, and Benefits',
-   'Provided Salaries and Wages for the services rendered by CMO Personnel', 86222053.00, 0.00, 0.00, 1),
-  ('1000-000-2-1-01-001-001-002', 'Administrative Cost for Travelling (Local)',
-   'Provided Allocation for Transportation, Travel per Diems and Ferriage', 0.00, 7000000.00, 0.00, 2),
-  ('1000-000-2-1-01-001-001-007', 'Acquisition of Office Supplies',
-   'Procured Office Supplies based on the approved Project Procurement Management Plan', 0.00, 3500000.00, 0.00, 3),
-  ('1000-000-2-1-01-001-001-0030', 'Acquisition of Office Equipment',
-   'Procured Office Equipment based on the approved Project Procurement Management Plan', 0.00, 0.00, 20000000.00, 4)
-) as v(ref_code, description, expected_output, ps, mooe, co, sort_order)
+                         funding_source, amount_ps, amount_mooe, amount_fe, amount_co,
+                         ref_code, sort_order)
+select a.aip_id, a.department_id, v.row_kind, v.description,
+       v.office, v.starts, v.ends, v.expected_output,
+       v.funding, v.ps, v.mooe, 0, v.co, v.ref_code, v.sort_order
+from a, (values
+  ('header', 'General and Administrative Operation',
+   null::text, null::date, null::date, null::text, null::text,
+   0::numeric, 0::numeric, 0::numeric, null::text, 1),
+  ('ppa', 'Administrative Cost for Salaries, Wages, and Benefits',
+   'City Mayor''s Office', date '2027-01-01', date '2027-12-31',
+   'Provided Salaries and Wages for the services rendered by CMO Personnel', 'GF',
+   86222053.00, 0.00, 0.00, '1000-000-2-1-01-001-001-001', 2),
+  ('ppa', 'Administrative Cost for Travelling (Local)',
+   'City Mayor''s Office', date '2027-01-01', date '2027-12-31',
+   'Provided Allocation for Transportation, Travel per Diems and Ferriage', 'GF',
+   0.00, 7000000.00, 0.00, '1000-000-2-1-01-001-001-002', 3),
+  ('ppa', 'Acquisition of Office Supplies',
+   'City Mayor''s Office', date '2027-01-01', date '2027-12-31',
+   'Procured Office Supplies based on the approved Project Procurement Management Plan', 'GF',
+   0.00, 3500000.00, 0.00, '1000-000-2-1-01-001-001-007', 4),
+  ('ppa', 'Acquisition of Office Equipment',
+   'City Mayor''s Office', date '2027-01-01', date '2027-12-31',
+   'Procured Office Equipment based on the approved Project Procurement Management Plan', 'GF',
+   0.00, 0.00, 20000000.00, '1000-000-2-1-01-001-001-0030', 5)
+) as v(row_kind, description, office, starts, ends, expected_output, funding,
+       ps, mooe, co, ref_code, sort_order)
 where not exists (select 1 from tracks.ppas p where p.aip_id = (select aip_id from a));

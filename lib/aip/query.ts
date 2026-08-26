@@ -28,7 +28,7 @@ export interface VPpaRow {
   cca_amount: string | number | null
   ccm_amount: string | number | null
   cc_typology_code: string | null
-  group_path: string[] | null
+  row_kind: 'ppa' | 'header'
   sector_id: string
   sector_code: string
   sector_heading: string
@@ -85,7 +85,7 @@ export function toPpaRowSource(
     ccaAmount: optionalNum(row.cca_amount),
     ccmAmount: optionalNum(row.ccm_amount),
     ccTypologyCode: row.cc_typology_code,
-    groupPath: row.group_path ?? [],
+    rowKind: row.row_kind,
     sectorId: row.sector_id,
     sectorCode: row.sector_code,
     sectorHeading: row.sector_heading,

@@ -140,6 +140,6 @@ function stripSource(row: PpaRowSource): PpaRow {
     ccaAmount: row.ccaAmount,
     ccmAmount: row.ccmAmount,
     ccTypologyCode: row.ccTypologyCode,
-    groupPath: row.groupPath,
+    rowKind: row.rowKind,
   }
 }
