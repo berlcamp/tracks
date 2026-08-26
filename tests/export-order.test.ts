@@ -54,6 +54,7 @@ function gridRow(entry: (typeof DOCUMENT)[number]): PpaRowView {
     amount_co: 0, amount_total: entry.kind === 'ppa' ? 1000 : 0,
     cca_amount: null, ccm_amount: null, cc_typology_code: null,
     continues_ppa_id: null, sort_order: entry.sortOrder,
+    created_by: null, author_name: null,
     dept_status: 'pending', dept_remarks: null,
     planning_status: 'pending', planning_remarks: null,
     review_status: 'pending', review_remarks: null,

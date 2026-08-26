@@ -6,14 +6,23 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  canEditPpa, canFinalizePeriod, canModifyStructure, canReviewPpa, canSubmit,
-  reviewStage, type EditContext,
+  canDeleteRow, canEditPpa, canFinalizePeriod, canModifyStructure, canReviewPpa,
+  canSubmit, ownsRow, reviewStage, type EditContext, type RowLock,
 } from '@/lib/auth/permissions'
+
+/** A row this viewer wrote, unread and not returned, unless said otherwise. */
+function row(overrides: Partial<RowLock> = {}): RowLock {
+  return { isReturned: false, reviewStatus: 'pending', createdBy: ME, ...overrides }
+}
+
+const ME = 'profile-me'
+const SOMEONE_ELSE = 'profile-other'
 
 function ctx(overrides: Partial<EditContext> = {}): EditContext {
   return {
     role: 'dept_encoder',
     isSuperAdmin: false,
+    profileId: ME,
     departmentId: 'dep-cmo',
     aipStatus: 'draft',
     aipDepartmentId: 'dep-cmo',
@@ -32,30 +41,66 @@ describe('reviewStage', () => {
 })
 
 describe('canEditPpa', () => {
-  it('lets the office edit its own draft', () => {
-    expect(canEditPpa(ctx(), false, 'pending')).toBe(true)
+  it('lets an encoder edit their own row in a draft', () => {
+    expect(canEditPpa(ctx(), row())).toBe(true)
   })
 
   it('freezes a row the head has approved', () => {
-    expect(canEditPpa(ctx(), false, 'approved')).toBe(false)
+    expect(canEditPpa(ctx(), row({ reviewStatus: 'approved' }))).toBe(false)
   })
 
   it('reopens it when the approval is withdrawn', () => {
-    expect(canEditPpa(ctx(), false, 'returned')).toBe(true)
+    expect(canEditPpa(ctx(), row({ reviewStatus: 'returned' }))).toBe(true)
   })
 
   it('still reopens only the returned item of a submitted AIP', () => {
     const submitted = ctx({ aipStatus: 'returned' })
-    expect(canEditPpa(submitted, true, 'returned')).toBe(true)
-    expect(canEditPpa(submitted, false, 'pending')).toBe(false)
+    expect(canEditPpa(submitted, row({ isReturned: true, reviewStatus: 'returned' })))
+      .toBe(true)
+    expect(canEditPpa(submitted, row())).toBe(false)
   })
 
   it('shuts everyone out once the programme has gone to the LDC', () => {
     for (const periodStatus of ['for_ldc', 'for_mayor', 'for_council', 'approved', 'closed'] as const) {
-      expect(canEditPpa(ctx({ role: 'planning_admin', periodStatus }), false, 'pending'))
-        .toBe(false)
+      expect(canEditPpa(ctx({ role: 'planning_admin', periodStatus }), row())).toBe(false)
       expect(canModifyStructure(ctx({ role: 'planning_admin', periodStatus }))).toBe(false)
     }
+  })
+})
+
+describe('ownsRow', () => {
+  it('gives an encoder their own lines and nobody else’s', () => {
+    expect(ownsRow(ctx(), ME)).toBe(true)
+    expect(ownsRow(ctx(), SOMEONE_ELSE)).toBe(false)
+  })
+
+  it('gives the head the whole office — they sign for the submission', () => {
+    expect(ownsRow(ctx({ role: 'dept_head' }), SOMEONE_ELSE)).toBe(true)
+  })
+
+  it('leaves a row with no author on record open, so nothing is stranded', () => {
+    expect(ownsRow(ctx(), null)).toBe(true)
+  })
+})
+
+describe('canEditPpa and canDeleteRow, between two encoders', () => {
+  it('refuses another encoder’s row in the same office', () => {
+    const mine = row()
+    const theirs = row({ createdBy: SOMEONE_ELSE })
+    expect(canEditPpa(ctx(), mine)).toBe(true)
+    expect(canEditPpa(ctx(), theirs)).toBe(false)
+    expect(canDeleteRow(ctx(), mine)).toBe(true)
+    expect(canDeleteRow(ctx(), theirs)).toBe(false)
+  })
+
+  it('leaves City Planning able to touch either', () => {
+    const planning = ctx({ role: 'planning_staff', departmentId: null })
+    expect(canEditPpa(planning, row({ createdBy: SOMEONE_ELSE }))).toBe(true)
+    expect(canDeleteRow(planning, row({ createdBy: SOMEONE_ELSE }))).toBe(true)
+  })
+
+  it('will not delete a row that has been approved', () => {
+    expect(canDeleteRow(ctx(), row({ reviewStatus: 'approved' }))).toBe(false)
   })
 })
 

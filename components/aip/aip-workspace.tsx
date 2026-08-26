@@ -17,8 +17,8 @@ import { acceptAip, resolveReturn, submitAip } from '@/app/actions/aip'
 import { deletePpa } from '@/app/actions/ppa'
 import { moneyTotal } from '@/lib/format'
 import {
-  AIP_STATUS_LABELS, canAccept, canEditPpa, canModifyStructure,
-  canReviewPpa, canSubmit, reviewStage, type EditContext,
+  AIP_STATUS_LABELS, canAccept, canDeleteRow, canEditPpa, canModifyStructure,
+  canReviewPpa, canSubmit, reviewStage, type EditContext, type RowLock,
 } from '@/lib/auth/permissions'
 import { routes } from '@/lib/routes'
 import type {
@@ -161,7 +161,7 @@ export function AipWorkspace({
             <p className="font-medium">Item {row.item_no} — {row.description}</p>
             <p className="mt-0.5 text-muted-foreground">{row.open_return_reason}</p>
           </div>
-          {canEditPpa(ctx, true, null) ? (
+          {canEditPpa(ctx, lockOf(row)) ? (
             <Button
               size="sm" variant="outline" disabled={pending}
               onClick={() =>
@@ -183,7 +183,9 @@ export function AipWorkspace({
         canAddRow={mayAdd}
         canReview={mayReview}
         showReviewColumn={mayReview || ctx.role === 'dept_head' || openReturns > 0}
-        canEdit={(row) => canEditPpa(ctx, row.is_returned, row.review_status)}
+        showAuthorColumn={mayAdd || mayReview}
+        canEdit={(row) => canEditPpa(ctx, lockOf(row))}
+        canDelete={(row) => canDeleteRow(ctx, lockOf(row))}
         onAdd={(row, where) => {
           setEditing(null); setAnchor(row); setPlacement(where); setDialogOpen(true)
         }}
@@ -250,6 +252,15 @@ export function AipWorkspace({
       </AlertDialog>
     </div>
   )
+}
+
+/** The three things the lock turns on, read off the row. */
+function lockOf(row: PpaRowView): RowLock {
+  return {
+    isReturned: row.is_returned,
+    reviewStatus: row.review_status,
+    createdBy: row.created_by,
+  }
 }
 
 function badgeVariant(status: Aip['status']) {

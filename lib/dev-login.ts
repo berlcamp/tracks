@@ -34,6 +34,7 @@ export const DEV_ACCOUNTS: DevAccount[] = [
   { email: 'viewer@tracks.local',      name: 'Victor Viewer',       role: 'Viewer',                      scope: 'City-wide' },
   { email: 'cmo.head@tracks.local',    name: 'Hector Head',         role: 'Department Head',             scope: 'CMO' },
   { email: 'cmo.encoder@tracks.local', name: 'Elena Encoder',       role: 'Department Encoder',          scope: 'CMO' },
+  { email: 'cmo.encoder2@tracks.local', name: 'Ramon Encoder',      role: 'Department Encoder',          scope: 'CMO' },
   { email: 'cho.head@tracks.local',    name: 'Helena Head',         role: 'Department Head',             scope: 'CHO' },
 ]
 

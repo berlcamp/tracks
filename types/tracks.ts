@@ -128,6 +128,9 @@ export interface PpaRowView {
   /** Whichever of the two applies at the AIP's current status. */
   review_status: ReviewStatus | null
   review_remarks: string | null
+  /** Who wrote this row. Null on anything that predates authorship. */
+  created_by: string | null
+  author_name: string | null
   open_return_id: string | null
   open_return_reason: string | null
   open_return_at: string | null

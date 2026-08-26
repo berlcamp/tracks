@@ -31,6 +31,8 @@ export function isDepartmentUser(role: UserRole | null): boolean {
 export interface EditContext {
   role: UserRole | null
   isSuperAdmin: boolean
+  /** The viewer's own profile, for deciding what they authored. */
+  profileId: string | null
   /** The viewer's own department, if any. */
   departmentId: string | null
   aipStatus: AipStatus
@@ -46,24 +48,49 @@ export function reviewStage(aipStatus: AipStatus): 'department' | 'planning' {
   return aipStatus === 'draft' ? 'department' : 'planning'
 }
 
+/** What the lock needs to know about one row. */
+export interface RowLock {
+  isReturned: boolean
+  reviewStatus: ReviewStatus | null
+  /** Author, or null on a row that predates authorship being recorded. */
+  createdBy: string | null
+}
+
+/**
+ * Mirrors tracks.owns_row(). An encoder answers for their own lines; the head
+ * answers for the office's whole submission, so nothing in it is closed to
+ * them. A row with no author on record belongs to no one and stays open, which
+ * is what keeps everything written before this rule reachable.
+ */
+export function ownsRow(ctx: EditContext, createdBy: string | null): boolean {
+  if (ctx.role === 'dept_head') return true
+  if (createdBy === null) return true
+  return createdBy === ctx.profileId
+}
+
 /**
  * Mirrors tracks.can_edit_ppa(). The submission lock in one function:
  * a returned item reopens; the two hundred rows beside it do not.
  */
-export function canEditPpa(
-  ctx: EditContext,
-  ppaIsReturned: boolean,
-  reviewStatus: ReviewStatus | null = null,
-): boolean {
+export function canEditPpa(ctx: EditContext, row: RowLock): boolean {
   if (!EDITABLE_PERIODS.includes(ctx.periodStatus)) return false
   if (isPlanning(ctx.role, ctx.isSuperAdmin)) return true
   if (!isDepartmentUser(ctx.role)) return false
   if (ctx.departmentId !== ctx.aipDepartmentId) return false
+  if (!ownsRow(ctx, row.createdBy)) return false
   // A row the head has passed is frozen: an approval that can be altered
   // underneath is a signature on a blank page.
-  if (reviewStatus === 'approved') return false
+  if (row.reviewStatus === 'approved') return false
   if (ctx.aipStatus === 'draft') return true
-  return ctx.aipStatus === 'returned' && ppaIsReturned
+  return ctx.aipStatus === 'returned' && row.isReturned
+}
+
+/** Mirrors the ppas_delete policy, which also turns on who wrote the row. */
+export function canDeleteRow(ctx: EditContext, row: RowLock): boolean {
+  if (!canModifyStructure(ctx)) return false
+  if (isPlanning(ctx.role, ctx.isSuperAdmin)) return true
+  if (!ownsRow(ctx, row.createdBy)) return false
+  return row.reviewStatus !== 'approved'
 }
 
 /** Mirrors tracks.can_modify_aip_structure(): adding or removing a row. */

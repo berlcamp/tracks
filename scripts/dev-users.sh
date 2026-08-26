@@ -31,6 +31,7 @@ accounting@tracks.local|Aurora Accounting|accounting|-
 viewer@tracks.local|Victor Viewer|viewer|-
 cmo.head@tracks.local|Hector Head (CMO)|dept_head|CMO
 cmo.encoder@tracks.local|Elena Encoder (CMO)|dept_encoder|CMO
+cmo.encoder2@tracks.local|Ramon Encoder (CMO)|dept_encoder|CMO
 cho.head@tracks.local|Helena Head (CHO)|dept_head|CHO
 ROWS
 )

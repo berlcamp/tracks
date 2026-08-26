@@ -279,3 +279,93 @@ select tracks_test.throws(format('select tracks.finalize_aip_period(%L)', :PERIO
 -- Leave the fixture where the other suites expect it.
 update tracks.aip_periods set status = 'open' where id = :PERIOD::uuid;
 select tracks_test.logout();
+
+-- ---------------------------------------------------------------------------
+-- 33. An encoder owns what they wrote
+-- ---------------------------------------------------------------------------
+--
+-- A department can have several encoders. Each may correct their own lines and
+-- nobody else's; the head answers for the whole submission and may correct any.
+
+\set CMO_ENC2 '''88888888-8888-8888-8888-888888888888'''
+
+-- A second encoder for the same office.
+insert into auth.users (id, email, raw_user_meta_data)
+values ('88888888-8888-8888-8888-888888888888', 'cmoenc2@bayugan.gov.ph',
+        '{"full_name":"Second Encoder"}')
+on conflict (id) do nothing;
+insert into tracks.profiles (id, auth_user_id, email, full_name, global_role)
+values ('a0000000-0000-0000-0000-000000000008',
+        :CMO_ENC2::uuid, 'cmo.encoder2@tracks.local', 'Second Encoder', 'user')
+on conflict (id) do nothing;
+insert into tracks.user_roles (profile_id, role, department_id)
+values ('a0000000-0000-0000-0000-000000000008', 'dept_encoder',
+        'd0000000-0000-0000-0000-000000000001')
+on conflict (profile_id) do nothing;
+
+-- Back to a draft so the office can work on it.
+delete from tracks.ppa_reviews;
+update tracks.aip_periods set status = 'open';
+update tracks.aips set status = 'draft' where id = '70000000-0000-0000-0000-000000000001';
+
+-- Each encoder writes a row of their own.
+select tracks_test.login(:CMO_ENC::uuid);
+select tracks.insert_ppa_row(:CMO_AIP::uuid, 90, 'ppa', 'First encoder''s row',
+                             null, null, null, null, null, 'GF', 0, 1000, 0, 0);
+select tracks_test.logout();
+
+select tracks_test.login(:CMO_ENC2::uuid);
+select tracks.insert_ppa_row(:CMO_AIP::uuid, 91, 'ppa', 'Second encoder''s row',
+                             null, null, null, null, null, 'GF', 0, 2000, 0, 0);
+
+select tracks_test.eq(
+  (select author_name from tracks.v_ppa_rows
+    where description = 'Second encoder''s row'), 'Second Encoder',
+  '33a. The row records who wrote it');
+
+update tracks.ppas set amount_mooe = 2500 where description = 'Second encoder''s row';
+select tracks_test.eq(
+  (select amount_mooe from tracks.ppas where description = 'Second encoder''s row'),
+  2500.00::numeric,
+  '33b. An encoder can correct their own row');
+
+update tracks.ppas set amount_mooe = 9999 where description = 'First encoder''s row';
+select tracks_test.eq(
+  (select amount_mooe from tracks.ppas where description = 'First encoder''s row'),
+  1000.00::numeric,
+  '33c. But not another encoder''s, even in the same office');
+
+delete from tracks.ppas where description = 'First encoder''s row';
+select tracks_test.eq(
+  (select count(*)::int from tracks.ppas where description = 'First encoder''s row'), 1,
+  '33d. Nor delete it');
+select tracks_test.logout();
+
+-- The head answers for the office, so nothing in it is closed to them.
+select tracks_test.login(:CMO_HEAD::uuid);
+update tracks.ppas set amount_mooe = 1500 where description = 'First encoder''s row';
+select tracks_test.eq(
+  (select amount_mooe from tracks.ppas where description = 'First encoder''s row'),
+  1500.00::numeric,
+  '33e. The department head can correct any row in their own office');
+select tracks_test.logout();
+
+-- Rows that predate this rule have no author, so no encoder is shut out of the
+-- programme the office was already working on.
+select tracks_test.login(:CMO_ENC2::uuid);
+update tracks.ppas set amount_ps = 86111111 where id = :PPA_1::uuid;
+select tracks_test.eq(
+  (select amount_ps from tracks.ppas where id = :PPA_1::uuid), 86111111.00::numeric,
+  '33f. A row with no author on record is open to any encoder of its office');
+select tracks_test.logout();
+
+select tracks_test.login(:CHO_HEAD::uuid);
+update tracks.ppas set amount_mooe = 1 where description = 'First encoder''s row';
+select tracks_test.eq(
+  (select amount_mooe from tracks.ppas where description = 'First encoder''s row'),
+  1500.00::numeric,
+  '33g. And another office reaches none of it');
+select tracks_test.logout();
+
+delete from tracks.ppas where description in
+  ('First encoder''s row', 'Second encoder''s row');

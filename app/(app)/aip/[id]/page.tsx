@@ -18,6 +18,7 @@ export default async function AipPage({ params }: { params: Promise<{ id: string
   const ctx: EditContext = {
     role: session.role,
     isSuperAdmin: session.isSuperAdmin,
+    profileId: session.profile.id,
     departmentId: session.department?.id ?? null,
     aipStatus: detail.aip.status,
     aipDepartmentId: detail.aip.department_id,

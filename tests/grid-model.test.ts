@@ -21,6 +21,7 @@ function row(overrides: Partial<PpaRowView> & { id: string }): PpaRowView {
     amount_ps: 0, amount_mooe: 1000, amount_fe: 0, amount_co: 0, amount_total: 1000,
     cca_amount: null, ccm_amount: null, cc_typology_code: null,
     continues_ppa_id: null, sort_order: 1,
+    created_by: null, author_name: null,
     dept_status: 'pending', dept_remarks: null,
     planning_status: 'pending', planning_remarks: null,
     review_status: 'pending', review_remarks: null,

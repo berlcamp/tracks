@@ -43,8 +43,12 @@ export interface AipGridProps {
   canEdit: (row: PpaRowView) => boolean
   /** Mirrors tracks.can_modify_aip_structure: may rows be added or removed. */
   canAddRow: boolean
+  /** Mirrors the ppas_delete policy, which turns on who wrote the row. */
+  canDelete?: (row: PpaRowView) => boolean
   /** Mirrors tracks.review_ppa(): may this viewer decide on rows right now. */
   canReview?: boolean
+  /** Show who wrote each row. Off for the printout view. */
+  showAuthorColumn?: boolean
   /** Show column (0), the reading each row has had. Off for the printout view. */
   showReviewColumn?: boolean
   showDepartmentBands?: boolean
@@ -73,8 +77,8 @@ const HEAD = [
 const CELL = 'border border-border/70 px-2 py-1.5 align-top'
 
 export function AipGrid({
-  rows, canEdit, canAddRow, canReview = false,
-  showReviewColumn = false,
+  rows, canEdit, canAddRow, canDelete, canReview = false,
+  showReviewColumn = false, showAuthorColumn = false,
   showDepartmentBands = true, onAdd, onEdit, onDelete, onReview,
 }: AipGridProps) {
   const [query, setQuery] = useState('')
@@ -92,8 +96,10 @@ export function AipGrid({
     () => canAddRow || canReview || filtered.some(canEdit),
     [canAddRow, canReview, filtered, canEdit],
   )
-  const columnCount =
-    HEAD.length + (interactive ? 1 : 0) + (showReviewColumn ? 1 : 0)
+  const columnCount = HEAD.length
+    + (interactive ? 1 : 0)
+    + (showReviewColumn ? 1 : 0)
+    + (showAuthorColumn ? 1 : 0)
 
   const menuCell = (row: PpaRowView) => {
     if (!interactive) return null
@@ -103,6 +109,7 @@ export function AipGrid({
           row={row}
           canEditRow={canEdit(row)}
           canModifyStructure={canAddRow}
+          canDeleteRow={canDelete ? canDelete(row) : canAddRow}
           canReview={canReview && row.row_kind === 'ppa'}
           onAdd={onAdd}
           onEdit={onEdit}
@@ -142,6 +149,14 @@ export function AipGrid({
               {showReviewColumn ? (
                 <th className={cn(CELL, 'w-28 font-semibold whitespace-nowrap')}>
                   <span className="block">Review</span>
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    not printed
+                  </span>
+                </th>
+              ) : null}
+              {showAuthorColumn ? (
+                <th className={cn(CELL, 'w-36 font-semibold whitespace-nowrap')}>
+                  <span className="block">Encoded by</span>
                   <span className="block text-xs font-normal text-muted-foreground">
                     not printed
                   </span>
@@ -202,6 +217,11 @@ export function AipGrid({
                     <tr key={entry.key} className="hover:bg-muted/40">
                       {menuCell(entry.row)}
                       {showReviewColumn ? <td className={cn(CELL, 'w-28')} /> : null}
+                      {showAuthorColumn ? (
+                        <td className={cn(CELL, 'w-36 text-xs text-muted-foreground')}>
+                          {entry.row.author_name ?? ''}
+                        </td>
+                      ) : null}
                       <td colSpan={HEAD.length}
                           className={cn(CELL, 'font-semibold')}>
                         {entry.name}
@@ -216,6 +236,11 @@ export function AipGrid({
                       {menuCell(row)}
                       {showReviewColumn ? (
                         <td className={cn(CELL, 'w-28')}><ReviewBadge row={row} /></td>
+                      ) : null}
+                      {showAuthorColumn ? (
+                        <td className={cn(CELL, 'w-36 text-xs text-muted-foreground')}>
+                          {row.author_name ?? <span className="italic">not recorded</span>}
+                        </td>
                       ) : null}
                       <td className={cn(CELL, 'whitespace-nowrap font-mono text-xs')}>{row.ref_code ?? ''}</td>
                       <td className={cn(CELL, 'text-center tabular-nums')}>{row.item_no ?? ''}</td>
@@ -263,6 +288,7 @@ export function AipGrid({
                         )}>
                       {interactive ? <td className={cn(CELL, 'w-10')} /> : null}
                       {showReviewColumn ? <td className={cn(CELL, 'w-28')} /> : null}
+                      {showAuthorColumn ? <td className={cn(CELL, 'w-36')} /> : null}
                       <td colSpan={8} className={cn(CELL, 'text-right')}>
                         {entry.label}
                         {entry.filtered ? (
@@ -293,12 +319,13 @@ export function AipGrid({
  * the database.
  */
 function RowMenu({
-  row, canEditRow, canModifyStructure, canReview,
+  row, canEditRow, canModifyStructure, canDeleteRow, canReview,
   onAdd, onEdit, onDelete, onReview,
 }: {
   row: PpaRowView
   canEditRow: boolean
   canModifyStructure: boolean
+  canDeleteRow: boolean
   canReview: boolean
   onAdd?: (anchor: PpaRowView | null, placement: RowPlacement) => void
   onEdit?: (row: PpaRowView) => void
@@ -306,7 +333,7 @@ function RowMenu({
   onReview?: (row: PpaRowView, decision: ReviewDecision) => void
 }) {
   const label = row.row_kind === 'header' ? row.description : `item ${row.item_no}`
-  if (!canEditRow && !canModifyStructure && !canReview) return null
+  if (!canEditRow && !canModifyStructure && !canDeleteRow && !canReview) return null
 
   return (
     <DropdownMenu>
@@ -350,7 +377,7 @@ function RowMenu({
           </>
         ) : null}
 
-        {canModifyStructure ? (
+        {canDeleteRow ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={() => onDelete?.(row)}>

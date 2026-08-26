@@ -83,6 +83,21 @@ Returning requires a reason; approving does not.
 `planning_staff` is labelled "City Planning Sector Officer" in the UI. The role
 key is unchanged; only `ROLE_LABELS` moved.
 
+## An encoder owns what they wrote
+A department can have several encoders — `user_roles.profile_id` is unique per
+PERSON, not per department. Each may edit and delete only the rows they
+authored; the **head may edit and delete any row in their own office**, because
+they sign for the whole submission. City Planning is unchanged.
+
+Inserting is not editing: an encoder may still add a row above or below anyone
+else's. Only Edit and Delete turn on authorship.
+
+`ppas.created_by` is null on everything seeded or folded in by `0012`, so a row
+with **no author on record is open to any encoder of its department** — enforcing
+strictly would have frozen every pre-existing row out of reach on the day
+`0014` was applied. `v_ppa_rows.author_name` drives the "Encoded by" column,
+which like the review column is on screen only and never printed.
+
 ## The submission lock
 The rule the whole department workflow turns on, and the one most likely to be
 broken by a later change:
@@ -192,11 +207,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 72 unit tests — exporter, template fidelity, grid, permissions
-npm run test:db      # 137 SQL tests against a throwaway Postgres.app database
+npm test             # 78 unit tests — exporter, template fidelity, grid, permissions
+npm run test:db      # 144 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 29 Playwright tests against the local stack
+npm run test:e2e     # 30 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```
