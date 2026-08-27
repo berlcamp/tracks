@@ -18,6 +18,21 @@ export async function getCurrentPeriod(): Promise<AipPeriod | null> {
   return data
 }
 
+/**
+ * The period a screen is showing: the one asked for, or the latest.
+ *
+ * A year in the URL that does not exist falls back to the current programme
+ * rather than an error page — a stale bookmark from a period somebody deleted
+ * should land on this year's work, not on a dead end.
+ */
+export async function resolvePeriod(periodId?: string): Promise<AipPeriod | null> {
+  if (!periodId) return getCurrentPeriod()
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('aip_periods').select('*').eq('id', periodId).maybeSingle<AipPeriod>()
+  return data ?? getCurrentPeriod()
+}
+
 export async function getPeriods(): Promise<AipPeriod[]> {
   const supabase = await createClient()
   const { data } = await supabase

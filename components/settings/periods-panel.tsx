@@ -6,34 +6,28 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { SettingsTable, TableCell, TableRow } from './settings-table'
 import { FormField } from './sectors-panel'
-import { setPeriodStatus, upsertPeriod } from '@/app/actions/settings'
+import { upsertPeriod } from '@/app/actions/settings'
 import { PERIOD_STATUS_LABELS } from '@/lib/auth/permissions'
 import { moneyTotal } from '@/lib/format'
-import type { AipPeriod, PeriodStatus } from '@/types/tracks'
-
-const STATUSES: PeriodStatus[] = [
-  'open', 'consolidating', 'for_ldc', 'for_mayor', 'for_council', 'approved', 'closed',
-]
+import type { AipPeriod } from '@/types/tracks'
 
 /**
- * The period's status is the paper trail: it says where the printed programme
- * currently is. Changing it is the one thing on this page that is not a plain
- * update — it goes through tracks.set_period_status so the move is audited.
+ * The years themselves: title, draft label, NTA figure.
+ *
+ * Status is shown but not changed here. Where the printed programme has got to
+ * is a fact about that document rather than reference data, so the control that
+ * moves it sits on the Consolidated AIP page, beside the programme it describes.
  */
 export function PeriodsPanel({ periods }: { periods: AipPeriod[] }) {
   const [editing, setEditing] = useState<AipPeriod | null>(null)
   const [open, setOpen] = useState(false)
-  const [pending, startTransition] = useTransition()
 
   return (
     <>
       <SettingsTable
-        description="One period per calendar year. Closing a period freezes every AIP in it, including City Planning's own edits."
+        description="One period per calendar year. Where the programme has got to is moved on the Consolidated AIP page; closing a period freezes every AIP in it, including City Planning's own edits."
         addLabel="Add period"
         onAdd={() => { setEditing(null); setOpen(true) }}
         head={['Year', 'Title', 'Draft label', 'NTA', 'Status', '']}
@@ -53,28 +47,7 @@ export function PeriodsPanel({ periods }: { periods: AipPeriod[] }) {
             <TableCell className="font-mono tabular-nums">
               {period.nta_amount === null ? '—' : moneyTotal(period.nta_amount)}
             </TableCell>
-            <TableCell>
-              <Select
-                value={period.status}
-                onValueChange={(status) =>
-                  startTransition(async () => {
-                    const result = await setPeriodStatus(period.id, status)
-                    if (result.ok) toast.success(`Moved to ${PERIOD_STATUS_LABELS[status as PeriodStatus]}.`)
-                    else toast.error(result.error)
-                  })}
-              >
-                <SelectTrigger className="w-56" disabled={pending}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUSES.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {PERIOD_STATUS_LABELS[status]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </TableCell>
+            <TableCell>{PERIOD_STATUS_LABELS[period.status]}</TableCell>
             <TableCell>
               <Button size="sm" variant="ghost"
                       onClick={() => { setEditing(period); setOpen(true) }}>

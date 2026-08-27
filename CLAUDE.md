@@ -74,6 +74,18 @@ Returning requires a reason; approving does not.
   lines, not the folder.
 - **Submitting opens a fresh reading.** The head's approval is not City
   Planning's, so `review_status` returns to `pending` at the planning stage.
+- **City Planning hands a submission back with `reopen_aip`**, from the Reopen
+  button on the AIP screen. It needs a reason, which goes to the audit log, and
+  it returns the AIP to `draft` without erasing a single review — so the head
+  resubmits without re-reading what they already passed, and City Planning
+  reads it afresh afterwards. It is the only way out of an AIP that was
+  accepted before its rows were read.
+- **Accepting is City Planning's signature on the lines**, as submitting is the
+  head's: `accept_aip()` refuses while any row is unread or standing as
+  returned (`0015`). It has to, because acceptance freezes the rows and
+  `review_ppa()` records nothing further on them — an AIP accepted unread could
+  never be finalised and could only be rescued by reopening it, which sends an
+  office that did nothing wrong back to a draft.
 - **`finalize_aip_period()` is the administrator's one signature.** It accepts
   every submitted department AIP and moves the period to `for_ldc` in one
   transaction, and it refuses while any row is pending or returned, or any
@@ -192,6 +204,21 @@ type scale match.
   would be worse than no subtotal. A heading survives a filter only if a row
   still stands under it or it matches the search itself, and the exporter applies
   the same rule, or screen and workbook disagree.
+- **The year is a URL parameter, not the latest row.** `?period=<id>` on
+  Submissions and on the Consolidated AIP, chosen with a picker that appears
+  once there is more than one; an id that no longer exists falls back to the
+  current programme rather than erroring. Only the current year offers "Start
+  AIP" — an older period may still be `open`, and nothing closes it
+  automatically. The consolidated page also takes `?kind=supplemental`, which
+  consolidates the period's supplementals as **their own document**: they are
+  never folded into the annual programme, and the finalise panel belongs to the
+  annual view even though the supplementals' rows count towards it.
+- **Where the programme has got to is set on the Consolidated AIP page**, not in
+  Settings — it is a fact about that document rather than reference data. The
+  control is the planning administrator's (`set_period_status`, audited, and
+  free in both directions because paper comes back as well as goes out); anyone
+  else reads it as a badge. Settings → AIP periods shows the status but no
+  longer changes it.
 - A department's annual AIP and its supplementals are shown **side by side and
   never merged**. Each is a document with its own status, its own council leg and
   its own printout; a merged view would invent a combined programme no office
@@ -207,11 +234,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 78 unit tests — exporter, template fidelity, grid, permissions
-npm run test:db      # 144 SQL tests against a throwaway Postgres.app database
+npm test             # 88 unit tests — exporter, template fidelity, grid, permissions
+npm run test:db      # 149 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 30 Playwright tests against the local stack
+npm run test:e2e     # 37 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```

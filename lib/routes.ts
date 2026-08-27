@@ -8,7 +8,14 @@ export const routes = {
   aip: (id: string) => `/aip/${id}` as const,
   aipExport: (id: string) => `/api/aip/${id}/export` as const,
   consolidated: '/consolidated',
-  consolidatedExport: (periodId: string) => `/api/periods/${periodId}/export` as const,
+  consolidatedFor: (periodId: string, kind: 'annual' | 'supplemental' = 'annual') =>
+    kind === 'supplemental'
+      ? (`/consolidated?period=${periodId}&kind=supplemental` as const)
+      : (`/consolidated?period=${periodId}` as const),
+  consolidatedExport: (periodId: string, kind: 'annual' | 'supplemental' = 'annual') =>
+    kind === 'supplemental'
+      ? (`/api/periods/${periodId}/export?kind=supplemental` as const)
+      : (`/api/periods/${periodId}/export` as const),
   monitoring: '/monitoring',
   monitoringPpa: (ppaId: string) => `/monitoring/${ppaId}` as const,
   budget: '/budget',

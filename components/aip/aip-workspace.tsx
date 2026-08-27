@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Download, Send, CheckCircle2, Undo2 } from 'lucide-react'
+import { Download, Send, CheckCircle2, RotateCcw, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AipGrid, type RowPlacement } from './aip-grid'
+import { ReopenDialog } from './reopen-dialog'
 import { ReviewDialog } from './review-dialog'
 import { SubmissionSwitcher } from './submission-switcher'
 import { PpaDialog } from './ppa-dialog'
@@ -18,7 +19,8 @@ import { deletePpa } from '@/app/actions/ppa'
 import { moneyTotal } from '@/lib/format'
 import {
   AIP_STATUS_LABELS, canAccept, canDeleteRow, canEditPpa, canModifyStructure,
-  canReviewPpa, canSubmit, reviewStage, type EditContext, type RowLock,
+  canReopen, canReviewPpa, canSeeReviewColumn, canSubmit, reviewStage,
+  type EditContext, type RowLock,
 } from '@/lib/auth/permissions'
 import { routes } from '@/lib/routes'
 import type {
@@ -49,6 +51,7 @@ export function AipWorkspace({
   const [reviewing, setReviewing] = useState<PpaRowView | null>(null)
   const [decision, setDecision] = useState<ReviewDecision>('approved')
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [reopenOpen, setReopenOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   const openReturns = rows.filter((row) => row.is_returned).length
@@ -58,7 +61,8 @@ export function AipWorkspace({
   const mayAdd = canModifyStructure(ctx)
   const mayReview = canReviewPpa(ctx)
   const maySubmit = canSubmit(ctx, openReturns, unread)
-  const mayAccept = canAccept(ctx, openReturns)
+  const mayAccept = canAccept(ctx, openReturns, unread)
+  const mayReopen = canReopen(ctx)
 
   return (
     <div className="flex flex-col gap-5">
@@ -105,6 +109,12 @@ export function AipWorkspace({
             </Button>
           ) : null}
 
+          {mayReopen ? (
+            <Button variant="outline" disabled={pending} onClick={() => setReopenOpen(true)}>
+              <RotateCcw className="size-4" /> Reopen
+            </Button>
+          ) : null}
+
           {mayAccept ? (
             <Button
               disabled={pending}
@@ -135,6 +145,11 @@ export function AipWorkspace({
           {unread > 0 && ctx.role === 'dept_head' && stage === 'department' ? (
             <span className="ml-auto text-muted-foreground">
               Submitting opens once nothing is left waiting.
+            </span>
+          ) : null}
+          {unread > 0 && mayReview && stage === 'planning' ? (
+            <span className="ml-auto text-muted-foreground">
+              Accepting opens once every row has been read.
             </span>
           ) : null}
         </div>
@@ -182,7 +197,7 @@ export function AipWorkspace({
         showDepartmentBands={false}
         canAddRow={mayAdd}
         canReview={mayReview}
-        showReviewColumn={mayReview || ctx.role === 'dept_head' || openReturns > 0}
+        showReviewColumn={canSeeReviewColumn(ctx) || openReturns > 0}
         showAuthorColumn={mayAdd || mayReview}
         canEdit={(row) => canEditPpa(ctx, lockOf(row))}
         canDelete={(row) => canDeleteRow(ctx, lockOf(row))}
@@ -210,6 +225,13 @@ export function AipWorkspace({
         stage={stage}
         open={reviewOpen}
         onOpenChange={setReviewOpen}
+      />
+
+      <ReopenDialog
+        aip={aip}
+        departmentName={department.display_name}
+        open={reopenOpen}
+        onOpenChange={setReopenOpen}
       />
 
       <AlertDialog open={deleting !== null}

@@ -7,7 +7,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   canDeleteRow, canEditPpa, canFinalizePeriod, canModifyStructure, canReviewPpa,
-  canSubmit, ownsRow, reviewStage, type EditContext, type RowLock,
+  canAccept, canReopen, canSeeReviewColumn, canSetPeriodStatus, canSubmit, ownsRow,
+  reviewStage,
+  type EditContext, type RowLock,
 } from '@/lib/auth/permissions'
 
 /** A row this viewer wrote, unread and not returned, unless said otherwise. */
@@ -142,6 +144,79 @@ describe('canReviewPpa', () => {
     expect(canReviewPpa(ctx({
       role: 'planning_staff', aipStatus: 'submitted', periodStatus: 'for_ldc',
     }))).toBe(false)
+  })
+})
+
+describe('canSeeReviewColumn', () => {
+  it('shows the decision to the encoder it was made about', () => {
+    // The head sends a row back for revision; the encoder who wrote it has no
+    // other place to read that, or the remarks that came with it.
+    expect(canSeeReviewColumn(ctx({ role: 'dept_encoder' }))).toBe(true)
+    expect(canSeeReviewColumn(ctx({ role: 'dept_head' }))).toBe(true)
+  })
+
+  it('still shows it once the AIP has left the office', () => {
+    const submitted = { aipStatus: 'submitted' } as const
+    expect(canSeeReviewColumn(ctx({ ...submitted, role: 'dept_encoder' }))).toBe(true)
+    expect(canSeeReviewColumn(ctx({ ...submitted, role: 'planning_staff' }))).toBe(true)
+  })
+
+  it('keeps it off another office’s programme', () => {
+    expect(canSeeReviewColumn(ctx({ role: 'dept_encoder', departmentId: 'dep-cho' })))
+      .toBe(false)
+    expect(canSeeReviewColumn(ctx({ role: 'budget', departmentId: null }))).toBe(false)
+  })
+})
+
+describe('canAccept', () => {
+  const officer = ctx({ role: 'planning_staff', aipStatus: 'submitted' })
+
+  it('opens only when City Planning has read every line', () => {
+    expect(canAccept(officer, 0, 5)).toBe(false)
+    expect(canAccept(officer, 0, 0)).toBe(true)
+  })
+
+  it('stays shut while an item is out for correction', () => {
+    expect(canAccept(officer, 1, 0)).toBe(false)
+  })
+
+  it('belongs to City Planning and to a submitted AIP', () => {
+    expect(canAccept(ctx({ role: 'dept_head', aipStatus: 'submitted' }), 0, 0)).toBe(false)
+    expect(canAccept(ctx({ role: 'planning_staff', aipStatus: 'draft' }), 0, 0)).toBe(false)
+    expect(canAccept(ctx({ role: 'planning_staff', aipStatus: 'accepted' }), 0, 0)).toBe(false)
+  })
+})
+
+describe('canReopen', () => {
+  it('is City Planning’s escape hatch, at either desk', () => {
+    expect(canReopen(ctx({ role: 'planning_staff', aipStatus: 'submitted' }))).toBe(true)
+    expect(canReopen(ctx({ role: 'planning_admin', aipStatus: 'accepted' }))).toBe(true)
+    expect(canReopen(ctx({ role: 'dept_head', aipStatus: 'submitted' }))).toBe(false)
+    expect(canReopen(ctx({ role: 'budget', aipStatus: 'submitted' }))).toBe(false)
+  })
+
+  it('has nothing to undo on a draft', () => {
+    expect(canReopen(ctx({ role: 'planning_staff', aipStatus: 'draft' }))).toBe(false)
+  })
+
+  it('is not offered once the programme has gone to the LDC', () => {
+    // The RPC would allow it; the office would get back a draft that
+    // can_edit_ppa refuses every edit to.
+    expect(canReopen(ctx({
+      role: 'planning_admin', aipStatus: 'accepted', periodStatus: 'for_ldc',
+    }))).toBe(false)
+  })
+})
+
+describe('canSetPeriodStatus', () => {
+  it('is the administrator’s, and at any point on the paper trail', () => {
+    // Paper comes back from the Mayor's Office as well as going out, so this
+    // one is not gated on the period being editable.
+    expect(canSetPeriodStatus('planning_admin', false)).toBe(true)
+    expect(canSetPeriodStatus(null, true)).toBe(true)
+    expect(canSetPeriodStatus('planning_staff', false)).toBe(false)
+    expect(canSetPeriodStatus('dept_head', false)).toBe(false)
+    expect(canSetPeriodStatus('viewer', false)).toBe(false)
   })
 })
 

@@ -134,9 +134,45 @@ export function canReviewPpa(ctx: EditContext): boolean {
   return isPlanning(ctx.role, ctx.isSuperAdmin) && ctx.aipStatus !== 'accepted'
 }
 
-export function canAccept(ctx: EditContext, openReturns: number): boolean {
+/**
+ * Deciding is one thing; being told is another. Whoever the decision lands on
+ * has to be able to read it — an encoder whose row the head sent back learns
+ * that from this column and nowhere else, and the remarks come with it. So the
+ * column is shown to everyone in the AIP's own office whatever their role, and
+ * to whoever is doing the reading. It is on screen only and never printed.
+ */
+export function canSeeReviewColumn(ctx: EditContext): boolean {
+  return canReviewPpa(ctx) || ctx.departmentId === ctx.aipDepartmentId
+}
+
+/**
+ * Mirrors tracks.accept_aip(). Accepting is City Planning's signature on the
+ * lines, the way submitting is the head's — so it is refused while a row is
+ * unread, and refused for the same reason at both ends: after acceptance the
+ * rows are frozen and no further decision can be recorded on them.
+ */
+export function canAccept(
+  ctx: EditContext, openReturns: number, unapprovedRows = 0,
+): boolean {
   return isPlanning(ctx.role, ctx.isSuperAdmin) &&
-    ctx.aipStatus === 'submitted' && openReturns === 0
+    ctx.aipStatus === 'submitted' && openReturns === 0 && unapprovedRows === 0
+}
+
+/**
+ * Mirrors tracks.reopen_aip(). City Planning's escape hatch — "they sent in the
+ * wrong file", or a submission accepted before anyone read it. It puts the AIP
+ * back to `draft`, so the office owns it again and has to submit it a second
+ * time; the reviews already recorded stay recorded, and the reason is written
+ * to the audit log.
+ *
+ * Narrower than the RPC in one way, on purpose: the RPC has no period check, but
+ * once the programme has gone to the LDC `can_edit_ppa` refuses every edit, so
+ * reopening there would hand the office a draft it cannot touch.
+ */
+export function canReopen(ctx: EditContext): boolean {
+  return isPlanning(ctx.role, ctx.isSuperAdmin) &&
+    ctx.aipStatus !== 'draft' &&
+    EDITABLE_PERIODS.includes(ctx.periodStatus)
 }
 
 /**
@@ -165,6 +201,23 @@ export const AIP_STATUS_LABELS: Record<AipStatus, string> = {
   returned: 'Returned for correction',
   accepted: 'Accepted',
 }
+
+/**
+ * Mirrors tracks.set_period_status(). Moving the programme along the paper
+ * trail — to the LDC, the Mayor, the Council — is the administrator's, at any
+ * status: it records where the printed folder actually is, and paper comes back
+ * as well as goes out.
+ */
+export function canSetPeriodStatus(
+  role: UserRole | null, isSuperAdmin: boolean,
+): boolean {
+  return isSuperAdmin || role === 'planning_admin'
+}
+
+/** The paper trail in order, for the control that moves the period along it. */
+export const PERIOD_STATUS_ORDER: PeriodStatus[] = [
+  'open', 'consolidating', 'for_ldc', 'for_mayor', 'for_council', 'approved', 'closed',
+]
 
 export const PERIOD_STATUS_LABELS: Record<PeriodStatus, string> = {
   open: 'Open for submissions',

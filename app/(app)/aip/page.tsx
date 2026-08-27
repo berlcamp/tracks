@@ -6,17 +6,25 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { requireSession } from '@/lib/auth/session'
-import { getCurrentPeriod, listAips } from '@/lib/data/aip'
+import { getPeriods, listAips, resolvePeriod } from '@/lib/data/aip'
 import { AIP_STATUS_LABELS, isDepartmentUser } from '@/lib/auth/permissions'
 import { moneyTotal } from '@/lib/format'
 import { routes } from '@/lib/routes'
+import { PeriodPicker } from '@/components/aip/period-picker'
 import { StartAipButton } from '@/components/aip/start-aip-button'
 import { groupSubmissions, submissionLabel } from '@/lib/aip/submissions'
 import { cn } from '@/lib/utils'
 
-export default async function AipListPage() {
+export default async function AipListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>
+}) {
   const session = await requireSession()
-  const period = await getCurrentPeriod()
+  const { period: requestedPeriod } = await searchParams
+  const [period, periods] = await Promise.all([
+    resolvePeriod(requestedPeriod), getPeriods(),
+  ])
 
   if (!period) {
     return (
@@ -53,13 +61,22 @@ export default async function AipListPage() {
           </p>
         </div>
 
-        {departmentScoped ? (
-          <StartAipButton
-            periodId={period.id}
-            departmentId={session.department!.id}
-            hasAnnual={hasAnnual}
-          />
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {periods.length > 1 ? (
+            <PeriodPicker periods={periods} currentId={period.id} />
+          ) : null}
+          {/* Only the year being worked on takes a new submission. An older
+              period may still be `open` — nothing closes it automatically — and
+              starting this year's AIP against last year's programme is a
+              mistake nobody notices until the export. */}
+          {departmentScoped && period.id === periods[0]?.id ? (
+            <StartAipButton
+              periodId={period.id}
+              departmentId={session.department!.id}
+              hasAnnual={hasAnnual}
+            />
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-lg border border-border">

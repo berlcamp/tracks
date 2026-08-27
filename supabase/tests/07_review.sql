@@ -215,6 +215,17 @@ select tracks_test.throws(format('select tracks.finalize_aip_period(%L)', :PERIO
   '31c. Nor while a row has not been checked by City Planning');
 select tracks_test.logout();
 
+-- Accepting asks the same question, at the last moment the answer can still be
+-- acted on: after acceptance the rows are frozen and review_ppa() takes no
+-- further decision on them. An AIP accepted unread can never be finalised.
+select tracks_test.login(:PLAN_STAFF::uuid);
+select tracks_test.eq(
+  (select planning_status from tracks.v_ppa_rows where id = :PPA_2::uuid), 'returned',
+  '31c-i. Resolving a return is the department answering, not City Planning reading');
+select tracks_test.throws(format('select tracks.accept_aip(%L)', :CMO_AIP),
+  '31c-ii. So the submission cannot be accepted yet either');
+select tracks_test.logout();
+
 -- Read every remaining row.
 select tracks_test.login(:PLAN_STAFF::uuid);
 do $$
@@ -231,6 +242,15 @@ begin
     perform tracks.review_ppa(r.id, 'approved', 'Checked.');
   end loop;
 end $$;
+select tracks_test.logout();
+
+select tracks_test.login(:PLAN_STAFF::uuid);
+select tracks.accept_aip(:CMO_AIP::uuid);
+select tracks_test.eq((select status from tracks.aips where id = :CMO_AIP::uuid),
+  'accepted', '31c-iii. With every row read, the submission is accepted');
+select tracks_test.throws(
+  format('select tracks.review_ppa(%L, ''returned'', ''On second thoughts'')', :PPA_2),
+  '31c-iv. And nothing more is decided about it — which is why the check is here');
 select tracks_test.logout();
 
 -- The CHO submission has never been sent in.

@@ -146,9 +146,12 @@ select tracks_test.logout();
 -- ---------------------------------------------------------------------------
 
 select tracks_test.login(:PLAN_STAFF::uuid);
+select tracks_test.throws(format('select tracks.accept_aip(%L)', :CMO_AIP),
+  '12a-i. An AIP with rows City Planning has not read cannot be accepted');
+select tracks_test.approve_all(:CMO_AIP::uuid);
 select tracks.accept_aip(:CMO_AIP::uuid);
 select tracks_test.eq((select status from tracks.aips where id = :CMO_AIP::uuid),
-  'accepted', '12a. City Planning accepts the submission');
+  'accepted', '12a. City Planning accepts the submission once it has read every row');
 
 -- Planning overwrites a department figure during consolidation.
 update tracks.ppas set amount_mooe = 6000000 where id = :PPA_2::uuid;
