@@ -66,6 +66,17 @@ the three sectors, all 28 departments with their SUMMARY code numbers, and the
 CY 2027 period. It is written with `on conflict do nothing`, so it is safe to
 run twice.
 
+`supabase/seeds/statutory_funds.sql` is the second half, and is run separately
+because it needs `0016` applied first. It creates the four statutory funds and
+says which office files each one. It matches departments on `code`, never on a
+uuid — production's ids are its own — and it aborts rather than half-seeding if
+a code does not exist. Safe to run twice.
+
+Which office files which fund is the only part anyone edits: change the pairings
+in that file, or tick the boxes in Settings → Statutory funds. Base amounts are
+not seeded — what the 20% is 20% *of* is entered per year on the Consolidated
+AIP screen.
+
 Edit the bootstrap address first if `berlcamp@gmail.com` is not the account that
 should hold the planning-admin role:
 
@@ -122,3 +133,4 @@ on the first `create table`.
 | `0013_row_review.sql` | **Apply after 0012.** Per-row review at two stages, the frozen-approval rule, and `finalize_aip_period()`. Additive — it creates `ppa_reviews` and rewrites functions and views; no data is dropped. Every existing row starts `pending`, so **a department mid-encoding will find it cannot submit until its head has approved each row.** Tell the offices before applying. |
 | `0014_row_authorship.sql` | **Apply after 0013.** An encoder may edit and delete only rows they authored; the head keeps the whole office. Additive. Rows with no `created_by` — everything seeded or folded in by 0012 — stay open to any encoder of their department, so nothing already encoded is stranded. |
 | `0015_accept_requires_review.sql` | **Apply after 0014.** `accept_aip()` now refuses an AIP with a row City Planning has not approved — the same question `finalize_aip_period()` asks, asked while the answer can still be acted on. Function replacement only; no data changes. **An AIP already accepted with unread rows stays stuck** — nothing can be finalised until it is reopened (`reopen_aip`), resubmitted by its head, and read row by row. Check for them first:<br>`select a.id, d.name, count(*) from tracks.aips a join tracks.departments d on d.id = a.department_id join tracks.ppas p on p.aip_id = a.id join tracks.v_ppa_review_status rs on rs.ppa_id = p.id where a.status = 'accepted' and p.row_kind = 'ppa' and rs.planning_status <> 'approved' group by 1, 2;` |
+| `0016_statutory_funds.sql` | **Apply after 0015.** The 20% CDF, 5% CDRRMF, 5% GAD and 1% LCPC become documents of their own. Additive — it creates three tables, adds a nullable `aips.fund_id`, rebuilds the two `aips` unique indexes over `coalesce(fund_id, ...)` and replaces views and `finalize_aip_period()`. No data is dropped and every existing AIP keeps a null `fund_id`, which is the annual programme. **Two visible changes on the day it lands:** `finalize_aip_period()` stops counting statutory documents, and Budget and Accounting begin seeing **supplemental** PPAs in the worklist — they were hidden by an `aip_kind = 'annual'` filter and could never be allotted against. Then run `supabase/seeds/statutory_funds.sql` (below) — without it no office has a fund to file. |
