@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react'
+import { Download, MonitorPlay } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { requireRole } from '@/lib/auth/session'
@@ -137,6 +137,13 @@ export default async function ConsolidatedPage({
               canRecord={isPlanning(session.role, session.isSuperAdmin)}
             />
           )}
+          {/* The same document, laid out for a projector rather than a printer.
+              It reads the same views this page does. */}
+          <Button asChild variant="outline">
+            <Link href={routes.planningReportsFor(period.id, { kind, fundId }) as never}>
+              <MonitorPlay className="size-4" /> Present
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <a href={routes.consolidatedExport(period.id, kind, fundId)}>
               <Download className="size-4" /> Export to Excel

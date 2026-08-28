@@ -4,7 +4,8 @@ import { routes } from './routes'
 export interface NavItem {
   label: string
   href: string
-  icon: 'layout-dashboard' | 'table' | 'layers' | 'wallet' | 'activity' | 'settings'
+  icon: 'layout-dashboard' | 'table' | 'layers' | 'wallet' | 'activity'
+    | 'presentation' | 'settings'
   /** Roles that see this item. Empty means everyone provisioned. */
   roles?: UserRole[]
 }
@@ -29,6 +30,16 @@ export const NAV: NavSection[] = [
       { label: 'Submissions', href: routes.aips, icon: 'table',
         roles: ['planning_staff', 'planning_admin', 'viewer'] },
       { label: 'Consolidated AIP', href: routes.consolidated, icon: 'layers',
+        roles: ['planning_staff', 'planning_admin', 'budget', 'accounting', 'viewer'] },
+    ],
+  },
+  {
+    label: 'Reporting',
+    items: [
+      // The deck the office presents from. Same readership as the consolidated
+      // programme — a department has no call to present the city's AIP, and
+      // its own figures are on its AIP screen.
+      { label: 'AIP Presentation', href: routes.planningReports, icon: 'presentation',
         roles: ['planning_staff', 'planning_admin', 'budget', 'accounting', 'viewer'] },
     ],
   },

@@ -36,6 +36,30 @@ export const routes = {
       ? `/api/periods/${periodId}/export?${query}`
       : `/api/periods/${periodId}/export`
   },
+  /**
+   * The City Planning presentation deck. `slide` is the report on screen and
+   * the document triple is the same one the consolidated view takes, so a link
+   * to "the 20% CDF's execution slide for CY 2026" is a link somebody can send.
+   */
+  planningReports: '/planning/reports',
+  /** The same deck with the application taken off the screen. */
+  planningReportsPresent: '/planning/reports/present',
+  planningReportsFor: (
+    periodId?: string,
+    options: {
+      slide?: string
+      kind?: 'annual' | 'supplemental'
+      fundId?: string | null
+    } = {},
+  ) => {
+    const params = new URLSearchParams()
+    if (periodId) params.set('period', periodId)
+    if (options.slide) params.set('slide', options.slide)
+    if (options.kind === 'supplemental') params.set('kind', 'supplemental')
+    if (options.fundId) params.set('fund', options.fundId)
+    const query = params.toString()
+    return query ? `/planning/reports?${query}` : '/planning/reports'
+  },
   monitoring: '/monitoring',
   monitoringPpa: (ppaId: string) => `/monitoring/${ppaId}` as const,
   budget: '/budget',

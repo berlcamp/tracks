@@ -302,3 +302,104 @@
   font-optical-sizing: auto;
   letter-spacing: -0.02em;
 }
+
+/* ---------------------------------------------------------------------------
+   The presentation deck  (/planning/reports)
+
+   One slide is one 16:9 box, and everything inside it is sized in `cqh` — a
+   percentage of that box's HEIGHT. So the deck is typeset once and reads the
+   same whether it is a panel inside the app shell, a full-screen slide on a
+   1080p projector, or a landscape page out of the printer: change the box and
+   every number, label and bar in it changes with it. That is the whole reason
+   the slides carry no pixel sizes.
+
+   `container-type: size` has to sit on a DIFFERENT element from the one using
+   the units — an element cannot query itself — hence the stage/slide pair.
+--------------------------------------------------------------------------- */
+
+.deck-stage {
+  container-type: size;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
+
+.deck-slide {
+  /* ~2.1% of slide height. On a 1080-line projector that is a 23px base, so
+     the body copy lands near 29px and a headline figure near 120px — legible
+     from the back of a session hall, which is the only test that matters. */
+  font-size: clamp(0.6875rem, 2.1cqh, 2.5rem);
+  height: 100%;
+  width: 100%;
+}
+
+/* Presentation mode: the deck alone, on black-free high contrast. Navigation,
+   the sidebar and the app header are gone — a slide with a browser chrome and
+   a hamburger menu on it is a screenshot of an app, not a presentation. */
+.deck-present {
+  background: var(--background);
+}
+
+.deck-present .deck-stage {
+  /* Fit the 16:9 box to whichever of the two axes runs out first, so the slide
+     is never cropped and never letterboxed twice. */
+  width: min(100vw, calc(100dvh * 16 / 9));
+  height: min(100dvh, calc(100vw * 9 / 16));
+}
+
+/* ---------------------------------------------------------------------------
+   Printing the deck.
+
+   Landscape, one slide per page. This is the app's only print surface that is
+   laid out rather than tabular; the consolidated grid also reads better
+   landscape, so the page rule is left global rather than fought over.
+--------------------------------------------------------------------------- */
+
+@page {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  .deck-print-hide {
+    display: none !important;
+  }
+
+  /* The app shell is not part of the document. Targeted by data-slot rather
+     than by a blanket `header { display: none }`, which would also strip the
+     public page's masthead. */
+  [data-slot="sidebar"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-inset"] > header {
+    display: none !important;
+  }
+
+  [data-slot="sidebar-inset"] > div {
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  /* The stage stops being a fixed box and becomes a page. Its aspect ratio was
+     there to hold a projector's shape, and paper has its own. */
+  .deck-stage {
+    aspect-ratio: auto;
+    width: 100%;
+    height: 17.5cm;
+    break-inside: avoid;
+    break-after: page;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .deck-stage:last-of-type {
+    break-after: auto;
+  }
+
+  /* Bars and legend swatches ARE the content here; a printer dropping
+     backgrounds would leave a slide of labels with nothing beside them. */
+  .deck-slide,
+  .deck-slide * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

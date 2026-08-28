@@ -1,5 +1,5 @@
 import {
-  Activity, Layers, LayoutDashboard, Settings, Table, Wallet,
+  Activity, Layers, LayoutDashboard, MonitorPlay, Settings, Table, Wallet,
 } from 'lucide-react'
 import type { NavItem } from '@/lib/nav'
 
@@ -9,6 +9,7 @@ const ICONS = {
   layers: Layers,
   wallet: Wallet,
   activity: Activity,
+  presentation: MonitorPlay,
   settings: Settings,
 } as const
 

@@ -31,8 +31,8 @@ It creates:
 | | |
 |---|---|
 | Schema | `tracks` only — nothing in `public` |
-| Tables | 18, plus 7 views |
-| Policies | 41 in `tracks`, plus 3 on `storage.objects` scoped to `bucket_id = 'tracks-documents'` |
+| Tables | 21, plus 9 views |
+| Policies | 47 in `tracks`, plus 3 on `storage.objects` scoped to `bucket_id = 'tracks-documents'` |
 | Triggers on `auth.users` | **none** — provisioning is lazy, via `tracks.claim_invite()` |
 
 ## 2. Expose the schema

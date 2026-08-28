@@ -238,6 +238,94 @@ up a column of pesos** — totals come from `v_aip_totals`, `v_sector_totals` an
 `v_period_totals`. A total missing from the input is reported as zero rather than
 derived, because a wrong number is worse than an obvious one.
 
+## The presentation deck
+
+`/planning/reports` is what the City Planning Office presents from: twelve
+reports on the Annual Investment Program, laid out 16:9 for a projector, for the
+Mayor, the LDC and the City Council. It reads and never writes.
+
+- **One RPC, one snapshot.** `tracks.presentation_deck()` returns every slide's
+  figures as a single `jsonb` document. Not nine endpoints: every slide is then
+  aggregated from the same read, so the Executive Summary's grand total and the
+  Sector slide's bars cannot drift apart between two round trips while somebody
+  is standing in front of a screen. It is `SECURITY INVOKER` over
+  `security_invoker` views, so it bypasses nothing.
+- **Nothing in TypeScript adds up a peso.** Where a slide states a share, a rate
+  or a variance, that number was computed in SQL beside the totals it came from.
+  `09_presentation.sql` asserts the deck's grand total against `v_period_totals`,
+  its sector figures against `v_sector_totals` and its office figures against
+  `v_aip_totals` — the guarantee is the test, not a convention.
+- **A drill-down recomputes and says so.** Filtering by sector, office, funding
+  source, barangay or status re-aggregates over the visible rows in SQL and sets
+  `filtered`, which every slide captions — the rule the grid already follows for
+  a subtotal marked "(filtered rows only)".
+- **The document is the same triple as the consolidated view**: (period, kind,
+  fund). A statutory fund is presented as its own deck and its money is in none
+  of the annual programme's figures.
+- **Everything is sized in `cqh`** — a percentage of the slide's own height (see
+  `.deck-slide`). One set of components typesets as a panel in the app shell, as
+  a full-screen slide on a projector and as a landscape page from `?print=all`.
+  Recharts is told nothing in pixels either: `ChartContainer`'s `aspect-video`
+  and `text-xs` are both overridden, so a chart is as large as the panel it is
+  given and its axis type scales with the slide.
+- **The chart type follows the figures, not variety** (`components/reports/charts.tsx`,
+  on Recharts through shadcn's `ChartContainer`):
+
+  | | |
+  |---|---|
+  | horizontal bars | a ranking with long names — sectors, offices, barangays, funding sources, the largest PPAs. Names read left to right, so the category axis has to be the vertical one |
+  | vertical bars | a small ordered set with short labels: the review checkpoints, the money cascade, a programme against a ceiling |
+  | line | time. Years, and the twelve months of the execution year. The slope is the point; a bar chart of months reads as a ranking |
+  | donut | a **partition** of one figure already on the slide. Never a ranking — a pie of fourteen offices is unreadable at four metres and on paper |
+
+  A single percentage against a track stays a plain `<Meter>`: a charting
+  library adds nothing to it and a gauge would take four times the room.
+  `domain={[0, 'dataMax']}` is set explicitly on every measure axis — left to
+  choose, Recharts rounds the maximum up to a "nice" number and every bar is
+  then drawn at a fraction of the width for no reason a reader can see.
+- **The Executive Summary carries the year's execution curve**: cumulative
+  obligation against disbursement, January to December, aggregated by the
+  `monthly` CTE in `presentation_deck()`. The gap between the two lines is
+  money committed and not yet paid, and its shape over the year is the thing a
+  table of totals cannot show. Anything dated before the year opens January
+  rather than starting the curve at zero — otherwise the chart draws a January
+  jump that never happened — so the last point IS the total beside it, which
+  `09_presentation.sql` asserts.
+- **`components/reports/slides.tsx` is `'use client'`**, and has to be: a
+  formatter passed to a chart is a function, and a function cannot cross the
+  server/client boundary. Without it the interactive deck worked and
+  `?print=all` — reached straight from a server component — returned a 500.
+- **Presentation mode is a ROUTE, not an overlay.** `/planning/reports/present`
+  lives in its own `(present)` route group with no shell. An overlay was tried
+  first and only ever *covers* the sidebar: the rail keeps its place in the tab
+  order and in the accessibility tree behind it, so somebody tabbing
+  mid-presentation lands on links nobody can see and a screen reader announces
+  a navigation that is not on the screen. Here there is no navigation to hide,
+  because none is rendered. Both routes resolve the request through
+  `loadDeckRequest()`, so the screen the presentation was set up on and the
+  screen behind the Mayor cannot show two different documents. Arrows and
+  Page Up/Down move between slides — whoever is presenting is holding a clicker
+  that sends nothing else.
+
+### Two things the deck states rather than hides
+
+- **Barangay is DERIVED.** The AIP form has no location column and `ppas` has no
+  barangay: `tracks.barangay_mentions()` reads names out of a PPA's description
+  and expected output, and the slide says so in as many words. A row naming
+  several barangays is attributed to **none** of them — attributing it to each
+  would count the same peso twice — and a row naming none is not assigned
+  anywhere; both go to their own buckets, which are on screen. A barangay
+  breakdown that could be relied on needs a location recorded against the PPA,
+  which is a change to the row and to the encoding form, not to this report.
+- **The resources slide compares against what is recorded, and nothing else.**
+  `aip_periods.nta_amount` and the statutory bases are figures the planning
+  administrator entered. TRACKS holds no revenue projection and the deck invents
+  none, so the "gap" is a gap against the NTA alone and is labelled that way.
+
+Physical progress that was never reported is never rendered as 0%: it is its own
+state, it is left out of the weighted average, and the slide prints how much of
+the programme the average speaks for.
+
 ## The app
 
 Next.js 16 App Router, React 19, Tailwind 4, shadcn (radix-nova) — the same
@@ -330,11 +418,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 100 unit tests — exporter, template fidelity, grid, permissions
-npm run test:db      # 173 SQL tests against a throwaway Postgres.app database
+npm test             # 118 unit tests — exporter, template fidelity, grid, permissions, deck
+npm run test:db      # 220 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 38 Playwright tests against the local stack
+npm run test:e2e     # 46 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```
