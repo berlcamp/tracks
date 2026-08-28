@@ -56,3 +56,31 @@ export const inviteSchema = z
     (v) => (['dept_encoder', 'dept_head'].includes(v.role) ? true : v.departmentId === null),
     { message: 'A city-wide role must not be tied to a department', path: ['departmentId'] },
   )
+
+/**
+ * A statutory fund. `percentage` is the share of the year's base the programme
+ * may not exceed — 20 for the 20% CDF, written the way the statute writes it
+ * rather than as 0.20.
+ */
+export const statutoryFundSchema = z.object({
+  id: z.uuid().optional(),
+  code: z.string().trim().min(1).max(30).transform((v) => v.toUpperCase()),
+  name: z.string().trim().min(1).max(200),
+  shortLabel: z.string().trim().min(1).max(40),
+  sheetName: z.string().trim().min(1).max(31,
+    'Excel worksheet names cannot exceed 31 characters'),
+  percentage: z.coerce.number().gt(0, 'Enter a share greater than zero').max(100),
+  sortOrder: z.coerce.number().int().min(0).max(999),
+  active: z.boolean().default(true),
+  /** The departments allowed to file this fund. May be empty. */
+  departmentIds: z.array(z.uuid()).default([]),
+})
+
+/** The year's base amount for one fund — what the ceiling is a share of. */
+export const fundBaseSchema = z.object({
+  fundId: z.uuid(),
+  periodId: z.uuid(),
+  baseAmount: z.string().trim()
+    .transform((v) => Number(v.replace(/,/g, '')))
+    .refine((v) => Number.isFinite(v) && v >= 0, 'Enter a valid amount'),
+})

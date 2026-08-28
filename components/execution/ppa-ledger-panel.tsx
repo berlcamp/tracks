@@ -29,12 +29,21 @@ import type { UserRole } from '@/types/tracks'
  * The three transaction kinds are separate tabs because they are separate
  * offices' work: Budget records the allotment and the OBR, Accounting records
  * the DV. The buttons follow the role; the database follows it again.
+ *
+ * `canRecordMoney` says whether this copy of the ledger is the place money is
+ * entered. It is a placement decision, not a permission — Budget & Obligations
+ * is the workspace, monitoring is the report, and a report that also takes
+ * entries is a report people edit by accident. The officer's rights are
+ * unchanged: they record the same OBR from /budget, and RLS would let them
+ * either way. Physical progress is not money and stays available on both,
+ * because the implementing office reports it from the monitoring side.
  */
 
 type Kind = 'allotment' | 'obligation' | 'disbursement' | 'progress'
 
 export function PpaLedgerPanel({
   ppaId, title, subtitle, approvedAmount, ledger, role, isSuperAdmin,
+  canRecordMoney,
 }: {
   ppaId: string
   title: string
@@ -43,11 +52,13 @@ export function PpaLedgerPanel({
   ledger: PpaLedger
   role: UserRole | null
   isSuperAdmin: boolean
+  /** Whether this screen is where allotments, OBRs and DVs are entered. */
+  canRecordMoney: boolean
 }) {
   const [dialog, setDialog] = useState<Kind | null>(null)
 
-  const isBudget = isSuperAdmin || role === 'budget'
-  const isAccounting = isSuperAdmin || role === 'accounting'
+  const isBudget = canRecordMoney && (isSuperAdmin || role === 'budget')
+  const isAccounting = canRecordMoney && (isSuperAdmin || role === 'accounting')
   const isPlanning = isSuperAdmin || role === 'planning_staff' || role === 'planning_admin'
 
   const f = ledger.financials

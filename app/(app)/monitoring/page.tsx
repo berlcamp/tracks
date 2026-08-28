@@ -1,8 +1,13 @@
+import Link from 'next/link'
 import { requireSession } from '@/lib/auth/session'
 import { getCurrentPeriod } from '@/lib/data/aip'
 import { getMonitoring, summarise } from '@/lib/data/execution'
+import { listFiledFunds } from '@/lib/data/statutory'
 import { MonitoringReport } from '@/components/execution/monitoring-report'
+import { Button } from '@/components/ui/button'
 import { moneyTotal } from '@/lib/format'
+import { routes } from '@/lib/routes'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +19,13 @@ export const dynamic = 'force-dynamic'
  * Unobligated / % / % Physical), so the office reads utilisation against the
  * same row order it approved the programme in.
  */
-export default async function MonitoringPage() {
+export default async function MonitoringPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fund?: string }>
+}) {
   const session = await requireSession()
+  const { fund: requestedFund } = await searchParams
   const period = await getCurrentPeriod()
 
   if (!period) {
@@ -26,7 +36,19 @@ export default async function MonitoringPage() {
     )
   }
 
-  const all = await getMonitoring(period.id)
+  // One document at a time. The report is read as the programme it belongs to,
+  // and mixing four funds into one list would undo the separation that makes
+  // each of them a document in the first place. The Budget worklist is the
+  // opposite case and stays unified.
+  //
+  // Only the funds this reader has a document for: a department sees the ones
+  // its own office filed, not the four that exist. A tab that opens on an empty
+  // report is worse than no tab.
+  const funds = await listFiledFunds(period.id, session.department?.id ?? null)
+  const fundId = funds.some((f) => f.fund_id === requestedFund) ? requestedFund! : null
+  const fund = fundId ? funds.find((f) => f.fund_id === fundId)! : null
+
+  const all = await getMonitoring(period.id, { fundId })
   const rows = session.department
     ? all.filter((row) => row.department_id === session.department!.id)
     : all
@@ -37,10 +59,25 @@ export default async function MonitoringPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Monitoring</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          CY {period.year} · physical and financial accomplishment
+          CY {period.year} · {fund ? fund.fund_name : 'annual investment programme'} ·
+          physical and financial accomplishment
           {session.department ? ` · ${session.department.display_name}` : ' · all departments'}
         </p>
       </div>
+
+      {funds.length > 0 ? (
+        <div className="flex w-fit flex-wrap items-center gap-1 rounded-lg border border-border p-1">
+          <DocumentTab href={routes.monitoring} label="Annual" active={!fundId} />
+          {funds.map((f) => (
+            <DocumentTab
+              key={f.fund_id}
+              href={`${routes.monitoring}?fund=${f.fund_id}`}
+              label={f.fund_label}
+              active={fundId === f.fund_id}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Figure label="Programmed" value={totals.approved} />
@@ -53,6 +90,18 @@ export default async function MonitoringPage() {
 
       <MonitoringReport rows={rows} />
     </div>
+  )
+}
+
+/** One document of the year, in the switch above the report. */
+function DocumentTab({ href, label, active }: {
+  href: string; label: string; active: boolean
+}) {
+  return (
+    <Button asChild size="sm" variant={active ? 'secondary' : 'ghost'}
+            className={cn(!active && 'text-muted-foreground')}>
+      <Link href={href as never}>{label}</Link>
+    </Button>
   )
 }
 

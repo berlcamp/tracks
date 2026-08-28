@@ -26,6 +26,10 @@ export interface MonitoringRow extends PpaFinancials {
   period_id: string
   period_year: number
   aip_kind: 'annual' | 'supplemental'
+  /** Null on the annual investment programme; set on a statutory filing. */
+  fund_id: string | null
+  fund_code: string | null
+  fund_label: string | null
   department_code: string
   department_name: string
   sector_id: string
@@ -42,10 +46,28 @@ export interface MonitoringRow extends PpaFinancials {
   sort_order: number
 }
 
-export async function getMonitoring(periodId: string): Promise<MonitoringRow[]> {
+/**
+ * Every PPA of a period with its money, for the report and for the worklist.
+ *
+ * This used to filter `aip_kind = 'annual'`, which quietly hid every
+ * supplemental PPA from Budget and Accounting: the rows existed, were reviewed
+ * and accepted, and then could never be allotted against because they never
+ * reached the worklist. Statutory money is real money and so is a
+ * supplemental's, so the filter is gone.
+ *
+ * `document` narrows the report to one document. The worklist passes nothing —
+ * a clerk wants every outstanding OBR in one place, whichever programme it is
+ * drawn on, and the fund is a column rather than a separate list.
+ */
+export async function getMonitoring(
+  periodId: string,
+  document?: { fundId: string | null },
+): Promise<MonitoringRow[]> {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('v_monitoring').select('*').eq('period_id', periodId).eq('aip_kind', 'annual')
+  const query = supabase.from('v_monitoring').select('*').eq('period_id', periodId)
+  const { data } = await (document
+    ? (document.fundId ? query.eq('fund_id', document.fundId) : query.is('fund_id', null))
+    : query)
   return sortMonitoring((data ?? []) as MonitoringRow[])
 }
 
@@ -53,6 +75,9 @@ export function sortMonitoring(rows: MonitoringRow[]): MonitoringRow[] {
   return [...rows].sort((a, b) =>
     a.sector_code.localeCompare(b.sector_code) ||
     a.department_code.localeCompare(b.department_code) ||
+    // Every document numbers its own rows from 1, so without this key one
+    // office's item 1 of the AIP and item 1 of its 20% CDF sort together.
+    (a.fund_label ?? '').localeCompare(b.fund_label ?? '') ||
     a.item_no - b.item_no)
 }
 

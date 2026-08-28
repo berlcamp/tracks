@@ -29,11 +29,19 @@ async function reference(supabase: Awaited<ReturnType<typeof createClient>>) {
   }
 }
 
-/** The consolidated workbook: SUMMARY plus one sheet per sector. */
+/**
+ * The consolidated workbook: SUMMARY plus one sheet per sector.
+ *
+ * With a fund id it is that statutory fund instead — every sector on one sheet
+ * named after the fund, and no SUMMARY. The two are never mixed: a statutory
+ * document is `kind = 'annual'` as well, so filtering on kind alone would fold
+ * the 20% CDF into the AIP's grand total.
+ */
 export async function buildConsolidatedExportData(
   periodId: string,
   kind: 'annual' | 'supplemental' = 'annual',
-): Promise<{ data: AipExportData; period: AipPeriod } | null> {
+  fundId: string | null = null,
+): Promise<{ data: AipExportData; period: AipPeriod; fundLabel: string | null } | null> {
   const supabase = await createClient()
 
   const { data: period } = await supabase
@@ -42,12 +50,28 @@ export async function buildConsolidatedExportData(
 
   const ref = await reference(supabase)
 
+  const fund = fundId
+    ? (await supabase.from('statutory_funds')
+        .select('name, short_label, sheet_name').eq('id', fundId)
+        .maybeSingle<{ name: string; short_label: string; sheet_name: string }>()).data
+    : null
+  if (fundId && !fund) return null
+
+  const rowQuery = supabase.from('v_ppa_rows').select('*')
+    .eq('period_id', periodId).eq('aip_kind', kind)
+  const deptQuery = supabase.from('v_aip_totals').select('*')
+    .eq('period_id', periodId).eq('kind', kind)
+  const sectorQuery = supabase.from('v_sector_totals').select('*')
+    .eq('period_id', periodId).eq('kind', kind)
+  const periodQuery = supabase.from('v_period_totals').select('*')
+    .eq('period_id', periodId).eq('kind', kind)
+
   const [{ data: rows }, { data: departmentTotals }, { data: sectorTotals }, { data: periodTotals }] =
     await Promise.all([
-      supabase.from('v_ppa_rows').select('*').eq('period_id', periodId).eq('aip_kind', kind),
-      supabase.from('v_aip_totals').select('*').eq('period_id', periodId).eq('kind', kind),
-      supabase.from('v_sector_totals').select('*').eq('period_id', periodId).eq('kind', kind),
-      supabase.from('v_period_totals').select('*').eq('period_id', periodId).eq('kind', kind)
+      fundId ? rowQuery.eq('fund_id', fundId) : rowQuery.is('fund_id', null),
+      fundId ? deptQuery.eq('fund_id', fundId) : deptQuery.is('fund_id', null),
+      fundId ? sectorQuery.eq('fund_id', fundId) : sectorQuery.is('fund_id', null),
+      (fundId ? periodQuery.eq('fund_id', fundId) : periodQuery.is('fund_id', null))
         .maybeSingle(),
     ])
 
@@ -56,8 +80,12 @@ export async function buildConsolidatedExportData(
     lguName: ref.lguName,
     lguType: ref.lguType,
     draftLabel: period.draft_label,
-    ntaAmount: period.nta_amount === null ? null : Number(period.nta_amount),
-    scope: 'consolidated',
+    // SUMMARY's loose NTA figure belongs to the annual programme's own sheet.
+    ntaAmount: fund ? null : period.nta_amount === null ? null : Number(period.nta_amount),
+    scope: fund ? 'fund' : 'consolidated',
+    fund: fund
+      ? { sheetName: fund.sheet_name, title: fund.name.toUpperCase() }
+      : null,
     rows: sortForExport((rows ?? []) as VPpaRow[]).map((row) =>
       toPpaRowSource(row, {
         summaryLabel: ref.summaryLabels.get(row.sector_id) ?? row.sector_heading,
@@ -70,7 +98,7 @@ export async function buildConsolidatedExportData(
       : { ps: 0, mooe: 0, fe: 0, co: 0, total: 0 },
   })
 
-  return { data, period }
+  return { data, period, fundLabel: fund?.short_label ?? null }
 }
 
 /** One department's own workbook: its sector sheet only, no SUMMARY. */
@@ -80,10 +108,14 @@ export async function buildDepartmentExportData(
   const supabase = await createClient()
 
   const { data: aip } = await supabase
-    .from('aips').select('id, period_id, department_id, kind, supplemental_no')
+    .from('aips')
+    .select('id, period_id, department_id, kind, supplemental_no, fund_id, '
+            + 'fund:statutory_funds(name, short_label, sheet_name)')
     .eq('id', aipId).maybeSingle<{
       id: string; period_id: string; department_id: string
       kind: 'annual' | 'supplemental'; supplemental_no: number | null
+      fund_id: string | null
+      fund: { name: string; short_label: string; sheet_name: string } | null
     }>()
   if (!aip) return null
 
@@ -109,7 +141,10 @@ export async function buildDepartmentExportData(
     lguType: ref.lguType,
     draftLabel: period.draft_label,
     ntaAmount: null,
-    scope: 'department',
+    scope: aip.fund ? 'fund' : 'department',
+    fund: aip.fund
+      ? { sheetName: aip.fund.sheet_name, title: aip.fund.name.toUpperCase() }
+      : null,
     supplementalNo: aip.supplemental_no,
     rows: sortForExport((rows ?? []) as VPpaRow[]).map((row) =>
       toPpaRowSource(row, {
@@ -126,7 +161,11 @@ export async function buildDepartmentExportData(
   })
 
   const suffix = aip.kind === 'supplemental' ? `-SP${aip.supplemental_no}` : ''
-  return { data, filename: `CY${period.year}-AIP-${department?.code ?? 'Department'}${suffix}.xlsx` }
+  const form = aip.fund ? slug(aip.fund.short_label) : 'AIP'
+  return {
+    data,
+    filename: `CY${period.year}-${form}-${department?.code ?? 'Department'}${suffix}.xlsx`,
+  }
 }
 
 /**
@@ -145,4 +184,9 @@ function sortForExport(rows: VPpaRow[]): VPpaRow[] {
     Number(a.sort_order) - Number(b.sort_order))
 }
 
-export const __test = { sortForExport }
+/** A label safe in a filename: "20% CDF" becomes "20-CDF". */
+export function slug(label: string): string {
+  return label.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'Fund'
+}
+
+export const __test = { sortForExport, slug }

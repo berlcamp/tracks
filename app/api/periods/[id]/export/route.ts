@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireRole } from '@/lib/auth/session'
-import { buildConsolidatedExportData } from '@/lib/aip/export-data'
+import { buildConsolidatedExportData, slug } from '@/lib/aip/export-data'
 import { buildAipWorkbook } from '@/lib/aip/workbook'
 
-/** The consolidated workbook: SUMMARY plus one worksheet per sector. */
+/**
+ * The consolidated workbook: SUMMARY plus one worksheet per sector.
+ * With `?fund=<id>`, one statutory fund on a single worksheet instead.
+ */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await requireRole(['planning_staff', 'planning_admin', 'budget', 'accounting', 'viewer'])
   const { id } = await params
@@ -12,20 +15,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     ? 'supplemental' as const
     : 'annual' as const
 
-  const built = await buildConsolidatedExportData(id, kind)
+  // A statutory fund is its own document — one sheet, no SUMMARY, and never
+  // part of the annual programme's grand total.
+  const fundId = request.nextUrl.searchParams.get('fund')
+
+  const built = await buildConsolidatedExportData(id, kind, fundId)
   if (!built || built.data.sectors.length === 0) {
     return NextResponse.json({ error: 'Nothing to export yet.' }, { status: 404 })
   }
 
   const buffer = await buildAipWorkbook(built.data).xlsx.writeBuffer()
   const suffix = kind === 'supplemental' ? '-Supplemental' : ''
+  const form = built.fundLabel ? slug(built.fundLabel) : 'AIP-Consolidated'
 
   return new NextResponse(buffer as ArrayBuffer, {
     headers: {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition':
-        `attachment; filename="CY${built.period.year}-AIP-Consolidated${suffix}.xlsx"`,
+        `attachment; filename="CY${built.period.year}-${form}${suffix}.xlsx"`,
       'Cache-Control': 'no-store',
     },
   })

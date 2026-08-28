@@ -37,18 +37,63 @@ const STAGES: Stage[] = ['ldc', 'mayor', 'council']
 /**
  * What happened to the printed programme once it left the office.
  *
- * The three stages are shown even when nothing has been recorded against them,
- * because the gap is the information: an empty "City Council" row is how you see
- * the folder has not come back yet.
+ * Behind a button rather than down the page: the trail is a thing you go and
+ * look at a few times a year, and it sat between the finalise panel and the
+ * grid, which is what people actually come to this screen for.
+ *
+ * One dialog with two views, not a dialog inside a dialog. Stacking two modals
+ * to record a resolution means two overlays and two Escape presses, and it
+ * leaves the page with two elements claiming the dialog role.
  */
-export function PaperTrail({ periodId, actions, canRecord }: {
+export function PaperTrailButton({ periodId, actions, canRecord }: {
   periodId: string
   actions: AipActionRow[]
   canRecord: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const [pending, startTransition] = useTransition()
+  const [recording, setRecording] = useState(false)
 
+  return (
+    <>
+      <Button variant="outline" onClick={() => { setRecording(false); setOpen(true) }}>
+        <Landmark className="size-4" /> Paper Trail
+      </Button>
+
+      <Dialog
+        open={open}
+        onOpenChange={(next) => { if (!next) setRecording(false); setOpen(next) }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          {recording ? (
+            <RecordActionForm
+              periodId={periodId}
+              // Back to the trail rather than closing it: the entry just
+              // recorded is the thing you want to see land.
+              onDone={() => setRecording(false)}
+            />
+          ) : (
+            <PaperTrailView
+              actions={actions}
+              canRecord={canRecord}
+              onRecord={() => setRecording(true)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+/**
+ * The three stages are shown even when nothing has been recorded against them,
+ * because the gap is the information: an empty "City Council" row is how you see
+ * the folder has not come back yet.
+ */
+function PaperTrailView({ actions, canRecord, onRecord }: {
+  actions: AipActionRow[]
+  canRecord: boolean
+  onRecord: () => void
+}) {
   async function openDocument(path: string) {
     const result = await signDocument(path)
     if (!result.ok) {
@@ -58,28 +103,15 @@ export function PaperTrail({ periodId, actions, canRecord }: {
     window.open(result.data.url, '_blank', 'noopener,noreferrer')
   }
 
-  // aria-labelledby makes this a named landmark: a screen reader announces
-  // "Paper trail region" rather than dropping the reader into an unlabelled block.
   return (
-    <section aria-labelledby="paper-trail-heading"
-             className="flex flex-col gap-4 rounded-lg border border-border p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <Landmark className="mt-0.5 size-5 text-muted-foreground" />
-          <div>
-            <h2 id="paper-trail-heading" className="font-semibold">Paper trail</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              The printed programme with the LDC, the Mayor and the City Council. Record
-              what the returned paper says.
-            </p>
-          </div>
-        </div>
-        {canRecord ? (
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="size-4" /> Record what came back
-          </Button>
-        ) : null}
-      </div>
+    <>
+      <DialogHeader>
+        <DialogTitle>Paper trail</DialogTitle>
+        <DialogDescription>
+          The printed programme with the LDC, the Mayor and the City Council. Record what
+          the returned paper says.
+        </DialogDescription>
+      </DialogHeader>
 
       <ol className="flex flex-col gap-3">
         {STAGES.map((stage) => {
@@ -118,28 +150,27 @@ export function PaperTrail({ periodId, actions, canRecord }: {
         })}
       </ol>
 
-      <RecordActionDialog
-        periodId={periodId}
-        open={open}
-        onOpenChange={setOpen}
-        pending={pending}
-        startTransition={startTransition}
-      />
-    </section>
+      {canRecord ? (
+        <DialogFooter>
+          <Button size="sm" onClick={onRecord}>
+            <Plus className="size-4" /> Record what came back
+          </Button>
+        </DialogFooter>
+      ) : null}
+    </>
   )
 }
 
-function RecordActionDialog({ periodId, open, onOpenChange, pending, startTransition }: {
+/** The second view of the same dialog: what the returned paper says. */
+function RecordActionForm({ periodId, onDone }: {
   periodId: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  pending: boolean
-  startTransition: (fn: () => void) => void
+  onDone: () => void
 }) {
   const [stage, setStage] = useState<Stage>('ldc')
   const [action, setAction] = useState<Action>('endorsed')
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [pending, startTransition] = useTransition()
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -180,13 +211,12 @@ function RecordActionDialog({ periodId, open, onOpenChange, pending, startTransi
         return
       }
       toast.success('Recorded.')
-      onOpenChange(false)
+      onDone()
     })
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (next) setError(null); onOpenChange(next) }}>
-      <DialogContent className="sm:max-w-lg">
+    <>
         <DialogHeader>
           <DialogTitle>Record what came back</DialogTitle>
           <DialogDescription>
@@ -254,7 +284,7 @@ function RecordActionDialog({ periodId, open, onOpenChange, pending, startTransi
           ) : null}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={onDone}>
               Cancel
             </Button>
             <Button type="submit" disabled={pending || uploading}>
@@ -262,7 +292,6 @@ function RecordActionDialog({ periodId, open, onOpenChange, pending, startTransi
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
   )
 }

@@ -70,6 +70,8 @@ export interface Aip {
   status: AipStatus
   submitted_at: string | null
   accepted_at: string | null
+  /** Null on the annual investment programme; set on a statutory filing. */
+  fund_id: string | null
 }
 
 /** Column C is a caption row, not a container: 'header' rows carry a
@@ -135,6 +137,10 @@ export interface PpaRowView {
   open_return_reason: string | null
   open_return_at: string | null
   is_returned: boolean
+  /** Null on the annual investment programme itself. */
+  fund_id: string | null
+  fund_code: string | null
+  fund_label: string | null
 }
 
 /** A row of tracks.v_aip_totals. */
@@ -159,6 +165,10 @@ export interface AipTotals {
   total_fe: number
   total_co: number
   total_amount: number
+  /** Null on the annual investment programme itself. */
+  fund_id: string | null
+  fund_code: string | null
+  fund_label: string | null
 }
 
 export interface SectorTotals {
@@ -168,6 +178,7 @@ export interface SectorTotals {
   sector_summary_label: string
   sector_sort: number
   kind: 'annual' | 'supplemental'
+  fund_id: string | null
   total_ps: number
   total_mooe: number
   total_fe: number
@@ -178,9 +189,62 @@ export interface SectorTotals {
 export interface PeriodTotals {
   period_id: string
   kind: 'annual' | 'supplemental'
+  fund_id: string | null
   total_ps: number
   total_mooe: number
   total_fe: number
   total_co: number
   total_amount: number
+}
+
+// ---------------------------------------------------------------------------
+// Statutory funds — the 20% CDF, 5% CDRRMF, 5% GAD and 1% LCPC.
+//
+// Reference data, so a fifth mandated fund is an admin screen rather than a
+// migration. A department's filing against one is an ordinary AIP document
+// carrying `fund_id`; `kind` still says only whether it is an addition.
+// ---------------------------------------------------------------------------
+
+export interface StatutoryFund {
+  id: string
+  code: string
+  name: string
+  /** What the buttons and chips say: "20% CDF". */
+  short_label: string
+  /** The worksheet tab the export writes. */
+  sheet_name: string
+  /** 20.00, not 0.20 — the way the statute writes it. */
+  percentage: number
+  sort_order: number
+  active: boolean
+}
+
+/** A fund with the departments allowed to file it. */
+export interface StatutoryFundWithDepartments extends StatutoryFund {
+  department_ids: string[]
+}
+
+/**
+ * A row of tracks.v_statutory_fund_totals — programmed against the ceiling.
+ *
+ * `base_amount` null means the planning administrator has not stated the year's
+ * base yet, so `ceiling_amount` is null too. That is a different answer from a
+ * ceiling of zero and the screen shows a dash for it.
+ */
+export interface StatutoryFundTotals {
+  fund_id: string
+  fund_code: string
+  fund_name: string
+  fund_label: string
+  sheet_name: string
+  percentage: number
+  sort_order: number
+  active: boolean
+  period_id: string
+  period_year: number
+  base_amount: number | null
+  ceiling_amount: number | null
+  programmed_amount: number
+  remaining_amount: number | null
+  document_count: number
 }

@@ -109,11 +109,18 @@ const createAipSchema = z.object({
   periodId: z.uuid(),
   departmentId: z.uuid(),
   kind: z.enum(['annual', 'supplemental']),
+  /** Null is the annual investment programme; a fund id is a statutory filing. */
+  fundId: z.uuid().nullish().transform((v) => v ?? null),
 })
 
 /** Opens a department's submission for a period. A supplemental takes the next
  *  free number automatically — SP-1, SP-2 — so two people opening one at the
- *  same time collide on the unique index rather than silently sharing a number. */
+ *  same time collide on the unique index rather than silently sharing a number.
+ *
+ *  A statutory document numbers separately from the annual programme's, because
+ *  the unique index counts (period, department, fund, no). Eligibility for the
+ *  fund is not checked here: the RLS insert policy refuses it, and a check in
+ *  TypeScript would only be a second opinion that could drift from the first. */
 export async function createAip(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const session = await requireSession()
@@ -122,12 +129,15 @@ export async function createAip(input: unknown): Promise<ActionResult<{ id: stri
 
     let supplementalNo: number | null = null
     if (parsed.kind === 'supplemental') {
-      const { data: last } = await supabase
+      const query = supabase
         .from('aips')
         .select('supplemental_no')
         .eq('period_id', parsed.periodId)
         .eq('department_id', parsed.departmentId)
         .eq('kind', 'supplemental')
+      const { data: last } = await (parsed.fundId
+        ? query.eq('fund_id', parsed.fundId)
+        : query.is('fund_id', null))
         .order('supplemental_no', { ascending: false })
         .limit(1)
         .maybeSingle<{ supplemental_no: number }>()
@@ -141,6 +151,7 @@ export async function createAip(input: unknown): Promise<ActionResult<{ id: stri
         department_id: parsed.departmentId,
         kind: parsed.kind,
         supplemental_no: supplementalNo,
+        fund_id: parsed.fundId,
         created_by: session.profile.id,
       })
       .select('id')
@@ -148,7 +159,13 @@ export async function createAip(input: unknown): Promise<ActionResult<{ id: stri
 
     if (error) {
       if (error.message.includes('aips_one_annual_idx')) {
-        throw new Error('This department already has an annual AIP for that year.')
+        throw new Error(parsed.fundId
+          ? 'This department already has that statutory document for the year.'
+          : 'This department already has an annual AIP for that year.')
+      }
+      if (error.message.includes('row-level security')) {
+        throw new Error(
+          'This office is not listed as filing that fund. City Planning assigns it in Settings.')
       }
       throw new Error(error.message)
     }

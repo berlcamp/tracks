@@ -21,7 +21,7 @@ test.describe('execution and reference data', () => {
     // which is exactly what this separation exists to prevent.
     await signIn(page, BUDGET_EMAIL)
     await page.goto('/budget')
-    await page.locator('a[href*="/budget?ppa="]').first().click()
+    await page.getByRole('link', { name: 'Open' }).first().click()
     await expect(page.getByRole('tab', { name: 'Obligations' })).toBeVisible()
 
     const reference = `OBR-E2E-${Date.now()}`
@@ -69,7 +69,7 @@ test.describe('the separation between Budget and Accounting', () => {
   test('City Planning cannot record money against a PPA', async ({ page }) => {
     await signIn(page)   // planning administrator
     await page.goto('/budget')
-    await page.locator('a[href*="/budget?ppa="]').first().click()
+    await page.getByRole('link', { name: 'Open' }).first().click()
 
     await expect(page.getByRole('tab', { name: 'Obligations' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Record obligation' })).toHaveCount(0)
@@ -80,7 +80,7 @@ test.describe('the separation between Budget and Accounting', () => {
   test('Budget records obligations but not disbursements', async ({ page }) => {
     await signIn(page, BUDGET_EMAIL)
     await page.goto('/budget')
-    await page.locator('a[href*="/budget?ppa="]').first().click()
+    await page.getByRole('link', { name: 'Open' }).first().click()
 
     await expect(page.getByRole('button', { name: 'Record obligation' })).toBeVisible()
     await page.getByRole('tab', { name: 'Disbursements' }).click()
@@ -90,12 +90,29 @@ test.describe('the separation between Budget and Accounting', () => {
   test('Accounting records disbursements but not obligations', async ({ page }) => {
     await signIn(page, ACCOUNTING_EMAIL)
     await page.goto('/budget')
-    await page.locator('a[href*="/budget?ppa="]').first().click()
+    await page.getByRole('link', { name: 'Open' }).first().click()
 
     await page.getByRole('tab', { name: 'Disbursements' }).click()
     await expect(page.getByRole('button', { name: 'Record disbursement' })).toBeVisible()
     await page.getByRole('tab', { name: 'Obligations' }).click()
     await expect(page.getByRole('button', { name: 'Record obligation' })).toHaveCount(0)
+  })
+
+  test('money is entered in the workspace, not in the report', async ({ page }) => {
+    // The same ledger reads from both sides. Only one of them takes entries —
+    // a report that also takes them is a report people edit by accident.
+    await signIn(page, BUDGET_EMAIL)
+    await page.goto('/monitoring')
+    await page.getByRole('link', { name: 'Ledger' }).first().click()
+    await expect(page).toHaveURL(/\/monitoring\/[0-9a-f-]{36}/)
+
+    await expect(page.getByRole('button', { name: 'Record obligation' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Record allotment' })).toHaveCount(0)
+
+    // And it says where they are entered, to whoever may enter them.
+    await page.getByRole('link', { name: 'Budget & Obligations' }).last().click()
+    await expect(page).toHaveURL(/\/budget\/[0-9a-f-]{36}/)
+    await expect(page.getByRole('button', { name: 'Record obligation' })).toBeVisible()
   })
 
   test('a viewer is offered nothing to write anywhere', async ({ page }) => {

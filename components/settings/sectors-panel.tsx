@@ -66,9 +66,31 @@ export function SectorsPanel({ sectors }: { sectors: Sector[] }) {
   )
 }
 
+/**
+ * A thin shell; the form is remounted by `key` whenever the sector being edited
+ * changes. Resetting from the Dialog's own `onOpenChange` never ran — the panel
+ * opens this by setting state directly, and Radix calls `onOpenChange` only for
+ * interactions it owns — so Active kept the previously edited sector's value.
+ */
 function SectorDialog({ sector, open, onOpenChange }: {
   sector: Sector | null
   open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        {open ? (
+          <SectorForm key={sector?.id ?? 'new'} sector={sector}
+                      onOpenChange={onOpenChange} />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SectorForm({ sector, onOpenChange }: {
+  sector: Sector | null
   onOpenChange: (open: boolean) => void
 }) {
   const [error, setError] = useState<string | null>(null)
@@ -76,14 +98,7 @@ function SectorDialog({ sector, open, onOpenChange }: {
   const [pending, startTransition] = useTransition()
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) { setActive(sector?.active ?? true); setError(null) }
-        onOpenChange(next)
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
+    <>
         <DialogHeader>
           <DialogTitle>{sector ? 'Edit sector' : 'Add sector'}</DialogTitle>
           <DialogDescription>
@@ -149,8 +164,7 @@ function SectorDialog({ sector, open, onOpenChange }: {
             <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
   )
 }
 

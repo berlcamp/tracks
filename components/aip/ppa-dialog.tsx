@@ -28,6 +28,14 @@ import type { RowPlacement } from './aip-grid'
 
 export interface PpaDialogProps {
   aipId: string
+  /**
+   * The statutory fund this document is drawn on, if any. A new row's column
+   * (7) starts as the fund's name rather than blank: in a 20% CDF document
+   * every line is drawn on the 20% CDF, and typing it forty times produces
+   * "20% CDF", "20%CDF" and "CDF" in the same printed column. It stays free
+   * text — a row funded "20% CDF / LGU counterpart" still prints correctly.
+   */
+  fundLabel?: string | null
   /** null opens the dialog in "add" mode. */
   row: PpaRowView | null
   /** Add mode: which row the new one goes beside, and on which side. */
@@ -51,10 +59,13 @@ interface FormState {
   amountCo: string
 }
 
-const EMPTY: FormState = {
-  refCode: '', description: '', implementingOffice: '',
-  startDate: '', endDate: '', expectedOutput: '', fundingSource: '',
-  amountPs: '', amountMooe: '', amountFe: '', amountCo: '',
+function empty(fundLabel?: string | null): FormState {
+  return {
+    refCode: '', description: '', implementingOffice: '',
+    startDate: '', endDate: '', expectedOutput: '',
+    fundingSource: fundLabel ?? '',
+    amountPs: '', amountMooe: '', amountFe: '', amountCo: '',
+  }
 }
 
 function fromRow(row: PpaRowView): FormState {
@@ -84,7 +95,7 @@ function numberField(value: number | string): string {
  * synchronously during the commit and cascade an extra render on every open.
  */
 export function PpaDialog({
-  aipId, row, anchor, placement = 'end', open, onOpenChange,
+  aipId, row, anchor, placement = 'end', open, onOpenChange, fundLabel,
 }: PpaDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -96,6 +107,7 @@ export function PpaDialog({
             row={row}
             anchor={anchor}
             placement={placement}
+            fundLabel={fundLabel}
             onOpenChange={onOpenChange}
           />
         ) : null}
@@ -105,9 +117,9 @@ export function PpaDialog({
 }
 
 function PpaForm({
-  aipId, row, anchor, placement = 'end', onOpenChange,
+  aipId, row, anchor, placement = 'end', onOpenChange, fundLabel,
 }: Omit<PpaDialogProps, 'open'>) {
-  const [form, setForm] = useState<FormState>(() => (row ? fromRow(row) : EMPTY))
+  const [form, setForm] = useState<FormState>(() => (row ? fromRow(row) : empty(fundLabel)))
   // Editing keeps the row's own kind; adding asks, because the two are
   // different documents: a line of the programme, or the caption above it.
   const [kind, setKind] = useState<PpaRowKind>(row?.row_kind ?? 'ppa')
@@ -228,7 +240,8 @@ function PpaForm({
           </Field>
 
           <Field label="Funding Source" htmlFor="ppa-funding" hint="(7)">
-            <Input id="ppa-funding" value={form.fundingSource} onChange={set('fundingSource')} placeholder="GF" />
+            <Input id="ppa-funding" value={form.fundingSource} onChange={set('fundingSource')}
+                   placeholder={fundLabel ?? 'GF'} />
           </Field>
 
           <fieldset className="grid gap-4 rounded-lg border border-border p-4 sm:grid-cols-4">

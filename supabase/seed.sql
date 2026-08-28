@@ -118,3 +118,25 @@ from a, (values
 ) as v(row_kind, description, office, starts, ends, expected_output, funding,
        ps, mooe, co, ref_code, sort_order)
 where not exists (select 1 from tracks.ppas p where p.aip_id = (select aip_id from a));
+
+-- ---------------------------------------------------------------------------
+-- Statutory funds.
+--
+-- The four the office files beside the annual programme. No department
+-- assignments are seeded: which office administers which fund is the City
+-- Planning Office's to state, and a wrong default is a Start button appearing
+-- where nobody expected one. Until an administrator assigns a department in
+-- Settings, no department sees a statutory Start option at all.
+-- ---------------------------------------------------------------------------
+
+insert into tracks.statutory_funds
+  (code, name, short_label, sheet_name, percentage, sort_order) values
+  ('CDF20',  '20% Development Fund',
+             '20% CDF',    '20% CDF',    20.00, 1),
+  ('CDRRMF', '5% Disaster Risk Reduction and Management Fund',
+             '5% CDRRMF',  '5% CDRRMF',   5.00, 2),
+  ('GAD',    '5% Gender and Development Fund',
+             '5% GAD',     '5% GAD',      5.00, 3),
+  ('LCPC',   '1% Local Council for the Protection of Children Fund',
+             '1% LCPC',    '1% LCPC',     1.00, 4)
+on conflict (code) do nothing;

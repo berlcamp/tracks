@@ -75,10 +75,42 @@ export function DepartmentsPanel({
   )
 }
 
+/**
+ * A thin shell; the form is remounted by `key` whenever the department being
+ * edited changes.
+ *
+ * The reset used to live in the Dialog's own `onOpenChange`, which never ran:
+ * the panel opens this by setting state directly, and Radix calls
+ * `onOpenChange` only for interactions it owns. Radix does unmount the content,
+ * so the `defaultValue` text inputs were fine — but Sector and Active are
+ * `useState` on this component, which stayed mounted, so they showed the
+ * previously edited department's values.
+ */
 function DepartmentDialog({ department, sectors, open, onOpenChange }: {
   department: Department | null
   sectors: Sector[]
   open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        {open ? (
+          <DepartmentForm
+            key={department?.id ?? 'new'}
+            department={department}
+            sectors={sectors}
+            onOpenChange={onOpenChange}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DepartmentForm({ department, sectors, onOpenChange }: {
+  department: Department | null
+  sectors: Sector[]
   onOpenChange: (open: boolean) => void
 }) {
   const [error, setError] = useState<string | null>(null)
@@ -87,18 +119,7 @@ function DepartmentDialog({ department, sectors, open, onOpenChange }: {
   const [pending, startTransition] = useTransition()
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) {
-          setSectorId(department?.sector_id ?? sectors[0]?.id ?? '')
-          setActive(department?.active ?? true)
-          setError(null)
-        }
-        onOpenChange(next)
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
+    <>
         <DialogHeader>
           <DialogTitle>{department ? 'Edit department' : 'Add department'}</DialogTitle>
           <DialogDescription>
@@ -175,7 +196,6 @@ function DepartmentDialog({ department, sectors, open, onOpenChange }: {
             <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
   )
 }

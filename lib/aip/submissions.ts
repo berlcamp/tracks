@@ -51,10 +51,20 @@ export function groupSubmissions<T extends AipTotals>(rows: T[]): DepartmentSubm
   return order.map((id) => byDepartment.get(id)!)
 }
 
+/**
+ * What this document is called in the list.
+ *
+ * A statutory document says which fund it is, because that is what identifies
+ * it — "Annual" is true of the 20% CDF and tells the reader nothing.
+ */
 export function submissionLabel(
-  submission: Pick<AipTotals, 'kind' | 'supplemental_no'>,
+  submission: Pick<AipTotals, 'kind' | 'supplemental_no' | 'fund_label'>,
 ): string {
-  return submission.kind === 'supplemental'
-    ? `Supplemental No. ${submission.supplemental_no}`
-    : 'Annual'
+  if (submission.kind !== 'supplemental') return submission.fund_label ?? 'Annual'
+  // The annual programme's supplemental needs no prefix — it is the only
+  // programme on that table. A fund's does, because "Supplemental No. 1" would
+  // be true of four different documents.
+  return submission.fund_label
+    ? `${submission.fund_label} — Supplemental No. ${submission.supplemental_no}`
+    : `Supplemental No. ${submission.supplemental_no}`
 }

@@ -1,23 +1,32 @@
-import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { requireRole } from '@/lib/auth/session'
 import { getCurrentPeriod } from '@/lib/data/aip'
-import { getMonitoring, getPpaLedger } from '@/lib/data/execution'
-import { PpaLedgerPanel } from '@/components/execution/ppa-ledger-panel'
+import { getMonitoring, summarise } from '@/lib/data/execution'
+import { BudgetWorklist } from '@/components/execution/budget-worklist'
 import { moneyTotal } from '@/lib/format'
 import { routes } from '@/lib/routes'
-import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Budget and Accounting's workspace: the programme as a list of work.
+ *
+ * The report lives at /monitoring and answers "where are we"; this answers
+ * "what is left to do", which is a different question and a different shape.
+ * The ledger a row opens into is the one place money is entered.
+ */
 export default async function BudgetPage({
   searchParams,
 }: {
   searchParams: Promise<{ ppa?: string }>
 }) {
-  const session = await requireRole(['budget', 'accounting', 'planning_staff', 'planning_admin'])
-  const { ppa: selectedId } = await searchParams
-  const period = await getCurrentPeriod()
+  await requireRole(['budget', 'accounting', 'planning_staff', 'planning_admin'])
+  const { ppa } = await searchParams
+  // The ledger used to be the right-hand column of this page, selected with
+  // ?ppa=. Old links still work.
+  if (ppa) redirect(routes.budgetPpa(ppa) as never)
 
+  const period = await getCurrentPeriod()
   if (!period) {
     return (
       <div className="rounded-lg border border-dashed border-border px-6 py-16 text-center">
@@ -27,8 +36,7 @@ export default async function BudgetPage({
   }
 
   const rows = await getMonitoring(period.id)
-  const selected = selectedId ? rows.find((row) => row.ppa_id === selectedId) ?? null : null
-  const ledger = selected ? await getPpaLedger(selected.ppa_id) : null
+  const totals = summarise(rows)
 
   return (
     <div className="flex flex-col gap-5">
@@ -40,54 +48,47 @@ export default async function BudgetPage({
         </p>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[22rem_1fr]">
-        <div className="flex max-h-[calc(100svh-16rem)] min-w-0 flex-col overflow-y-auto rounded-lg border border-border">
-          {rows.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-              No PPAs to work against yet.
-            </p>
-          ) : null}
-          {rows.map((row) => (
-            <Link
-              key={row.ppa_id}
-              href={`${routes.budget}?ppa=${row.ppa_id}` as never}
-              className={cn(
-                'border-b border-border px-4 py-3 text-sm last:border-b-0 hover:bg-muted/50',
-                row.ppa_id === selectedId && 'bg-muted',
-              )}
-            >
-              <p className="font-medium">{row.description}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {row.department_code} · item {row.item_no}
-              </p>
-              <p className="mt-1 font-mono text-xs tabular-nums text-muted-foreground">
-                {moneyTotal(row.allotted)} allotted · {moneyTotal(row.obligated)} obligated
-              </p>
-            </Link>
-          ))}
-        </div>
-
-        <div className="min-w-0">
-          {selected && ledger ? (
-            <PpaLedgerPanel
-              ppaId={selected.ppa_id}
-              title={selected.description}
-              subtitle={`${selected.department_name} · item ${selected.item_no}`}
-              approvedAmount={Number(selected.approved_amount)}
-              ledger={ledger}
-              role={session.role}
-              isSuperAdmin={session.isSuperAdmin}
-            />
-          ) : (
-            <div className="rounded-lg border border-dashed border-border px-6 py-16 text-center">
-              <h2 className="text-lg font-medium">Pick a PPA</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Its allotments, obligations and disbursements appear here.
-              </p>
-            </div>
-          )}
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Figure label="Programmed" value={totals.approved}
+                hint={`${rows.length} PPA${rows.length === 1 ? '' : 's'} in the programme`} />
+        <Figure label="Allotted" value={totals.allotted}
+                hint={gap(totals.approved, totals.allotted,
+                          'not yet released', 'allotted beyond the programme')} />
+        <Figure label="Obligated" value={totals.obligated}
+                hint={gap(totals.allotted, totals.obligated,
+                          'of the allotment unobligated', 'obligated beyond the allotment')} />
+        <Figure label="Disbursed" value={totals.disbursed}
+                hint={gap(totals.obligated, totals.disbursed,
+                          'obligated and unpaid', 'disbursed beyond the obligations')} />
       </div>
+
+      <BudgetWorklist rows={rows} />
+    </div>
+  )
+}
+
+/**
+ * The distance between two of the figures, said in the direction it actually
+ * runs. A negative "remaining" reads as an accounting error rather than the
+ * overrun it is — and an OBR raised before the allotment landed is exactly the
+ * thing the Budget Office wants named.
+ */
+function gap(from: number, to: number, under: string, over: string): string {
+  const difference = from - to
+  return difference < 0
+    ? `${moneyTotal(Math.abs(difference))} ${over}`
+    : `${moneyTotal(difference)} ${under}`
+}
+
+function Figure({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate font-mono text-lg font-semibold tabular-nums"
+         title={moneyTotal(value)}>
+        {moneyTotal(value)}
+      </p>
+      <p className="mt-1 text-xs leading-snug text-muted-foreground">{hint}</p>
     </div>
   )
 }

@@ -60,6 +60,7 @@ function gridRow(entry: (typeof DOCUMENT)[number]): PpaRowView {
     review_status: 'pending', review_remarks: null,
     open_return_id: null, open_return_reason: null, open_return_at: null,
     is_returned: false,
+    fund_id: null, fund_code: null, fund_label: null,
   }
 }
 

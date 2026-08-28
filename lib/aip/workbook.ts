@@ -32,6 +32,19 @@ export function buildAipWorkbook(data: AipExportData): ExcelJS.Workbook {
   wb.modified = wb.created
 
   if (data.scope === 'consolidated') addSummarySheet(wb, data)
+
+  if (data.scope === 'fund' && data.fund) {
+    // One worksheet for the whole fund. The sector bands stay — a fund spans
+    // several sectors and the reader still needs to know which one a
+    // department sits in — but they run down a single sheet rather than
+    // splitting into three tabs that would each want the same name.
+    const ws = createFormSheet(wb, data.fund.sheetName, data)
+    let row = 11
+    for (const sector of data.sectors) row = writeSectorBlock(ws, row, sector)
+    freezeHeader(ws)
+    return wb
+  }
+
   for (const sector of data.sectors) addSectorSheet(wb, sector, data)
   return wb
 }
@@ -41,7 +54,14 @@ export function buildAipWorkbook(data: AipExportData): ExcelJS.Workbook {
 // ---------------------------------------------------------------------------
 
 function addSectorSheet(wb: ExcelJS.Workbook, sector: SectorBlock, data: AipExportData) {
-  const ws = wb.addWorksheet(sector.sheetName, {
+  const ws = createFormSheet(wb, sector.sheetName, data)
+  writeSectorBlock(ws, 11, sector)
+  freezeHeader(ws)
+}
+
+/** The page: widths, print setup, and rows 1-10 of the official form. */
+function createFormSheet(wb: ExcelJS.Workbook, name: string, data: AipExportData) {
+  const ws = wb.addWorksheet(name, {
     pageSetup: {
       orientation: 'landscape',
       fitToPage: true,
@@ -59,9 +79,15 @@ function addSectorSheet(wb: ExcelJS.Workbook, sector: SectorBlock, data: AipExpo
   ws.getColumn('P').hidden = true
 
   writeFormHeader(ws, data)
+  return ws
+}
 
-  let row = 11
-  row = writeSectorBand(ws, row, sector.heading)
+/**
+ * One sector: its band, its departments, and the sector total that closes it.
+ * Returns the row after the total, so several can be stacked on one sheet.
+ */
+function writeSectorBlock(ws: ExcelJS.Worksheet, startRow: number, sector: SectorBlock) {
+  let row = writeSectorBand(ws, startRow, sector.heading)
 
   for (const dept of sector.departments) {
     row = writeDepartmentBand(ws, row, dept.displayName)
@@ -69,17 +95,23 @@ function addSectorSheet(wb: ExcelJS.Workbook, sector: SectorBlock, data: AipExpo
     row = writeTotalRow(ws, row, `${dept.displayName} TOTAL`, dept.totals, DEPARTMENT_TOTAL_FILL)
   }
 
-  writeTotalRow(ws, row, `${sector.heading} - TOTAL`, sector.totals, SECTOR_FILL)
-  // The grid is frozen below the numbered header so a 400-row sector still shows
-  // which column is which.
+  return writeTotalRow(ws, row, `${sector.heading} - TOTAL`, sector.totals, SECTOR_FILL)
+}
+
+/** Frozen below the numbered header, so a 400-row sheet still shows its columns. */
+function freezeHeader(ws: ExcelJS.Worksheet) {
   ws.views = [{ state: 'frozen', ySplit: 10 }]
 }
 
 /** Rows 1-10: the title block and the two-tier column header. */
 function writeFormHeader(ws: ExcelJS.Worksheet, data: AipExportData) {
-  const titleSuffix = data.supplementalNo
-    ? `SUPPLEMENTAL ANNUAL INVESTMENT PROGRAM (AIP) NO. ${data.supplementalNo}`
-    : 'ANNUAL INVESTMENT PROGRAM (AIP)'
+  const titleSuffix = data.fund
+    ? (data.supplementalNo
+        ? `${data.fund.title} — SUPPLEMENTAL NO. ${data.supplementalNo}`
+        : data.fund.title)
+    : data.supplementalNo
+      ? `SUPPLEMENTAL ANNUAL INVESTMENT PROGRAM (AIP) NO. ${data.supplementalNo}`
+      : 'ANNUAL INVESTMENT PROGRAM (AIP)'
 
   const titles: Array<[number, string]> = [
     [1, titleSuffix],

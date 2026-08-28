@@ -32,6 +32,7 @@ export default async function AipPage({ params }: { params: Promise<{ id: string
       department={detail.department}
       rows={detail.rows}
       siblings={detail.siblings}
+      fundLabel={detail.fundLabel}
       ctx={ctx}
     />
   )

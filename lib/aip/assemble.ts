@@ -39,8 +39,10 @@ export interface AssembleInput {
   lguType: string
   draftLabel: string | null
   ntaAmount: number | null
-  scope: 'consolidated' | 'department'
+  scope: 'consolidated' | 'department' | 'fund'
   supplementalNo?: number | null
+  /** Set when scope is 'fund': names the single worksheet and the title block. */
+  fund?: { sheetName: string; title: string } | null
   rows: PpaRowSource[]
   departmentTotals: DepartmentTotalSource[]
   sectorTotals: SectorTotalSource[]
@@ -113,6 +115,7 @@ export function assembleExportData(input: AssembleInput): AipExportData {
     grandTotals: input.grandTotals,
     scope: input.scope,
     supplementalNo: input.supplementalNo ?? null,
+    fund: input.fund ?? null,
   }
 }
 

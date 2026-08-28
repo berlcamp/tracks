@@ -69,8 +69,19 @@ export interface AipExportData {
   ntaAmount: number | null
   sectors: SectorBlock[]
   grandTotals: AmountSet
-  /** A department-scoped export prints only that department and skips SUMMARY. */
-  scope: 'consolidated' | 'department'
+  /**
+   * A department-scoped export prints only that department and skips SUMMARY.
+   * A 'fund' export is one statutory fund: every sector on ONE worksheet named
+   * after the fund, no SUMMARY — SUMMARY is the AIP form's sector roll-up and
+   * a 20% CDF roll-up is not that form.
+   */
+  scope: 'consolidated' | 'department' | 'fund'
   /** Set for a supplemental AIP: printed in the title block. */
   supplementalNo?: number | null
+  /**
+   * The statutory fund this document belongs to, when scope is 'fund'. Names
+   * the single worksheet and replaces the title block's form name — the sheet
+   * says "20% DEVELOPMENT FUND", not "ANNUAL INVESTMENT PROGRAM".
+   */
+  fund?: { sheetName: string; title: string } | null
 }

@@ -95,6 +95,67 @@ Returning requires a reason; approving does not.
 `planning_staff` is labelled "City Planning Sector Officer" in the UI. The role
 key is unchanged; only `ROLE_LABELS` moved.
 
+## Statutory funds
+
+The 20% CDF, 5% CDRRMF, 5% GAD and 1% LCPC are **separate documents with their
+own PPA rows**, filed beside the annual programme and never folded into it.
+
+A fund is **reference data** (`tracks.statutory_funds`, Settings → Statutory
+funds), carrying its code, its printed worksheet name and its `percentage`. Four
+boolean columns on `departments` would have meant a migration for the fifth
+mandated fund; a table means an admin screen. Each fund names the departments
+that may file it (`statutory_fund_departments`, many per fund).
+
+A department's filing is an **ordinary `aips` row carrying `fund_id`** — not a
+second PPA table. `ppa_reviews`, `ppa_returns`, `ppa_revisions`, `allotments`,
+`obligations`, `disbursements` and `ppa_progress` all point at `ppas`; a parallel
+table would need every one of them again and would drift from them by the second
+release. So the two-stage review, the submission lock, authorship and the
+execution ledger all apply unchanged.
+
+- **`kind` still means "annual or supplemental". `fund_id` says which
+  programme.** A mid-year addition to the CDF is `kind='supplemental',
+  fund_id=<CDF>` and needs no new concept. One annual per
+  (period, department, fund).
+- **The uniqueness indexes fold the null.** `aips_one_annual_idx` is on
+  `coalesce(fund_id, '000…0'::uuid)` — NULLs do not collide in a unique index,
+  so a bare nullable column would have quietly stopped constraining anything and
+  let a department open two annual AIPs.
+- **Eligibility is an RLS insert policy**, not a check in the form: `createAip`
+  writes through the RLS-bound client. Un-listing a department stops it
+  *starting* a new document and never touches one already filed — a settings
+  edit that deleted an office's encoded rows would be one nobody could safely
+  make.
+- **A statutory document does not gate `finalize_aip_period()`.** The programme
+  the LDC votes on is the annual AIP; a fund is a mandated attachment beside it,
+  and a half-encoded 1% LCPC must not hold the whole city. The finalise panel
+  says how many are outstanding without blocking on them, and finalising does
+  not accept them.
+- **Nothing links a statutory row to an annual one.** A project encoded in both
+  places is two independent rows and the database does not know they are the
+  same road. That is the accepted consequence of filing them as separate
+  documents with their own rows.
+- **The ceiling is stated, never enforced.** `statutory_fund_periods.base_amount`
+  is the year's base, entered by the planning administrator on the consolidated
+  fund view — the fund and its percentage are durable facts, the base is a fact
+  about CY2027. `v_statutory_fund_totals` reports base, ceiling, programmed and
+  remaining. A base not yet stated reports a **null** ceiling, not zero, and the
+  screen shows a dash. An overage is reported: a department encoding in
+  September cannot be blocked by what another office entered in August.
+- **Statutory money is not in the AIP's GRAND TOTAL.** `v_sector_totals` and
+  `v_period_totals` group by `fund_id`, so the annual consolidated view must
+  filter `fund_id is null` — filtering on `kind` alone would fold the 20% CDF in,
+  because a statutory document is `kind = 'annual'` too. The combined statutory
+  figure is stated once, beside the programme, as a figure.
+- **A fund exports as one worksheet** named from `sheet_name`, with the sector
+  bands intact and **no SUMMARY** — SUMMARY is the AIP form's sector roll-up and
+  a fund roll-up is not that form. `?fund=<id>` on the consolidated view and its
+  export route.
+- **Column (7) defaults to the fund's name** on a row added to a statutory
+  document, and stays free text — otherwise the same column prints "20% CDF",
+  "20%CDF" and "CDF". A row funded "20% CDF / LGU counterpart" still prints
+  correctly.
+
 ## An encoder owns what they wrote
 A department can have several encoders — `user_roles.profile_id` is unique per
 PERSON, not per department. Each may edit and delete only the rows they
@@ -138,8 +199,12 @@ City Planning may edit at any time until the period is `closed`. Enforced by
   row with `row_kind = 'header'` carrying only a description, and the whole
   document is one `sort_order` line — which is the only model in which "insert a
   row below this one" means the same thing everywhere. Flattening was one-way.
-- **Statutory-fund sheets are out of scope** (20% CDF, 5% CDRRMF, 5% GAD, 1% LCPC,
-  INFRASTRUCTURE CONSO). Only the sector sheets and SUMMARY are modelled.
+- **The statutory funds are modelled** (20% CDF, 5% CDRRMF, 5% GAD, 1% LCPC) —
+  see "Statutory funds" below. This reverses an earlier decision that they were
+  out of scope: the office files them every year and was keeping them in a
+  spreadsheet beside the one this application prints. **INFRASTRUCTURE CONSO is
+  still out of scope**, and so are the mandated GAD Plan and Budget and LDRRMFIP
+  forms — a fund exports as the AIP grid, and must not be called by those names.
 - **Climate-change columns (13)(14)(15) exist but are never populated** in the
   source. They are nullable and print blank.
 - `ref_code` is free text and is **not** derived from the item number, so the two
@@ -222,10 +287,41 @@ type scale match.
 - A department's annual AIP and its supplementals are shown **side by side and
   never merged**. Each is a document with its own status, its own council leg and
   its own printout; a merged view would invent a combined programme no office
-  ever approved. The combined figure is stated once, as a figure.
+  ever approved. The combined figure is stated once, as a figure — and it spans
+  **one programme only**, because a figure combining the annual AIP with the 20%
+  CDF would be a total nobody approved.
+- `/aip` is **two tables**: the annual programme with its supplementals, and the
+  statutory funds beneath it. "Start a document" is a menu — a supplemental, or
+  a fund this office is listed against and has not filed — rather than a row of
+  buttons that empties itself one at a time as each is used.
 - Monitoring measures utilisation against the **allotment**, not the programmed
   amount, and shows a dash rather than 0% when nothing has been allotted yet.
   Both figures are on screen together because they differ.
+- **`getMonitoring()` no longer filters `aip_kind = 'annual'`.** It used to, which
+  silently hid every supplemental PPA from Budget and Accounting: the rows were
+  encoded, reviewed and accepted, then could never be allotted against because
+  they never reached the worklist. `/monitoring` takes a document picker
+  (`?fund=`) because a report is read as the programme it belongs to; `/budget`
+  stays **one list across every document** with a fund column, because a clerk
+  wants every outstanding OBR in one place.
+- **Monitoring's fund tabs follow filed documents, not eligibility.** A
+  department sees a tab for each fund *its own office has filed*
+  (`listFiledFunds`), not the four that exist and not the ones it is merely
+  listed against in Settings — a report tab that opens on nothing is worse than
+  no tab, and the tab appears the day the document does. A `?fund=` for a
+  document the reader has none of falls back to the annual programme, the same
+  way a stale `?period=` does. The Consolidated AIP is the exception and lists
+  **every** fund: the planning administrator has to reach a fund to state its
+  base before anybody files against it.
+- **Money is entered in one place.** `/budget` is Budget and Accounting's
+  workspace — a single-column worklist of every PPA with the one thing
+  outstanding on it (`lib/execution/worklist.ts`, tested), opening into the
+  ledger at `/budget/<ppaId>`. `/monitoring` is the report and reads the same
+  ledger with the money buttons withheld (`canRecordMoney={false}`), because a
+  report that also takes entries is a report people edit by accident. This is
+  placement, not permission: the officer records the same OBR from the
+  workspace and RLS would allow either. Physical progress is not money and is
+  still reported from the monitoring side, by the office doing the work.
 - Every `<Label>` binds to its control with `htmlFor`. A label that is only text
   above a box announces nothing to a screen reader and does not focus on click.
 
@@ -234,11 +330,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 88 unit tests — exporter, template fidelity, grid, permissions
-npm run test:db      # 149 SQL tests against a throwaway Postgres.app database
+npm test             # 100 unit tests — exporter, template fidelity, grid, permissions
+npm run test:db      # 173 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 37 Playwright tests against the local stack
+npm run test:e2e     # 38 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```

@@ -17,6 +17,9 @@ function submission(overrides: Partial<AipTotals> & { aip_id: string }): AipTota
     sector_code: 'PUBLIC',
     sector_summary_label: 'GOVERNANCE SECTOR',
     sector_sort: 1,
+    fund_id: null,
+    fund_code: null,
+    fund_label: null,
     ppa_count: 1,
     total_ps: 0, total_mooe: 1000, total_fe: 0, total_co: 0, total_amount: 1000,
     ...overrides,
@@ -67,8 +70,19 @@ describe('groupSubmissions', () => {
 
 describe('submissionLabel', () => {
   it('names the annual and each supplemental', () => {
-    expect(submissionLabel({ kind: 'annual', supplemental_no: null })).toBe('Annual')
-    expect(submissionLabel({ kind: 'supplemental', supplemental_no: 3 }))
+    expect(submissionLabel({ kind: 'annual', supplemental_no: null, fund_label: null }))
+      .toBe('Annual')
+    expect(submissionLabel({ kind: 'supplemental', supplemental_no: 3, fund_label: null }))
       .toBe('Supplemental No. 3')
+  })
+
+  // A statutory document is named by its fund. "Annual" is true of the 20% CDF
+  // and tells the reader nothing, which is the whole reason these are two
+  // tables and not one.
+  it('names a statutory document by its fund', () => {
+    expect(submissionLabel({ kind: 'annual', supplemental_no: null, fund_label: '20% CDF' }))
+      .toBe('20% CDF')
+    expect(submissionLabel({ kind: 'supplemental', supplemental_no: 1, fund_label: '5% GAD' }))
+      .toBe('5% GAD — Supplemental No. 1')
   })
 })

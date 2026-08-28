@@ -207,3 +207,55 @@ function findRowIn(ws: ExcelJS.Worksheet, col: number, text: string): number {
   throw new Error(`"${text}" not found in column ${col}`)
 }
 
+
+// ---------------------------------------------------------------------------
+// A statutory fund prints as its own document
+//
+// The 20% CDF is filed beside the annual programme, not inside it. It spans
+// several sectors but is one worksheet — three tabs would each want the same
+// name — and it has no SUMMARY, because SUMMARY is the AIP form's sector
+// roll-up and a fund roll-up is not that form.
+// ---------------------------------------------------------------------------
+
+describe('a statutory fund export', () => {
+  let fundWb: ExcelJS.Workbook
+
+  beforeAll(async () => {
+    fundWb = await render({
+      ...sampleExportData(),
+      scope: 'fund',
+      fund: { sheetName: '20% CDF', title: '20% DEVELOPMENT FUND' },
+    })
+  })
+
+  it('is one worksheet, named after the fund, with no SUMMARY', () => {
+    expect(fundWb.worksheets.map((w) => w.name)).toEqual(['20% CDF'])
+  })
+
+  it('keeps every sector band on that one sheet', () => {
+    // The band label sits in column B; only the total row merges from A.
+    const column = columnValues(fundWb.getWorksheet('20% CDF')!, 2)
+    expect(column).toContain('GENERAL PUBLIC SECTOR')
+    expect(column).toContain('SOCIAL DEVELOPMENT SECTOR')
+  })
+
+  it('closes each sector with its own total', () => {
+    const column = columnValues(fundWb.getWorksheet('20% CDF')!, 1)
+    expect(column).toContain('GENERAL PUBLIC SECTOR - TOTAL')
+    expect(column).toContain('SOCIAL DEVELOPMENT SECTOR - TOTAL')
+  })
+
+  it('names the fund in the title block instead of the AIP', () => {
+    expect(String(fundWb.getWorksheet('20% CDF')!.getCell(1, 1).value))
+      .toBe('20% DEVELOPMENT FUND')
+  })
+
+  // The annual programme's own geometry must not have moved to make room for
+  // this — tests/aip-template.test.ts asserts the rest of it against the real
+  // workbook, and this is the assertion that the two paths stayed separate.
+  it('leaves the annual programme printing exactly as it did', () => {
+    expect(wb.worksheets.map((w) => w.name)).toEqual([
+      'SUMMARY', 'PUBLIC SERVICES Sector', 'SOCIAL SERVICES Sector',
+    ])
+  })
+})

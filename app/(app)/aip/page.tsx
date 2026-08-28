@@ -1,19 +1,11 @@
-import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
 import { requireSession } from '@/lib/auth/session'
 import { getPeriods, listAips, resolvePeriod } from '@/lib/data/aip'
-import { AIP_STATUS_LABELS, isDepartmentUser } from '@/lib/auth/permissions'
-import { moneyTotal } from '@/lib/format'
-import { routes } from '@/lib/routes'
+import { isDepartmentUser } from '@/lib/auth/permissions'
 import { PeriodPicker } from '@/components/aip/period-picker'
 import { StartAipButton } from '@/components/aip/start-aip-button'
-import { groupSubmissions, submissionLabel } from '@/lib/aip/submissions'
-import { cn } from '@/lib/utils'
+import { SubmissionsTable } from '@/components/aip/submissions-table'
+import { groupSubmissions } from '@/lib/aip/submissions'
+import { listStartableFunds } from '@/lib/data/statutory'
 
 export default async function AipListPage({
   searchParams,
@@ -43,10 +35,22 @@ export default async function AipListPage({
     ? all.filter((a) => a.department_id === session.department!.id)
     : all
 
-  const hasAnnual = rows.some((a) => a.kind === 'annual')
+  // The annual programme and the statutory funds are separate documents and are
+  // never shown as one list. A statutory filing is `kind = 'annual'` too, so
+  // splitting on kind alone would put the 20% CDF among the AIPs.
+  const annual = rows.filter((a) => !a.fund_id)
+  const statutory = rows.filter((a) => a.fund_id)
+
+  const hasAnnual = annual.some((a) => a.kind === 'annual')
+  const isCurrentPeriod = period.id === periods[0]?.id
+  const startableFunds = departmentScoped && isCurrentPeriod && hasAnnual
+    ? await listStartableFunds(session.department!.id, period.id)
+    : []
+
   // A department's supplementals sit under its annual AIP. They are separate
   // documents — a supplemental only adds PPAs — so they are listed, not merged.
-  const grouped = groupSubmissions(rows)
+  const grouped = groupSubmissions(annual)
+  const groupedStatutory = groupSubmissions(statutory)
 
   return (
     <div className="flex flex-col gap-5">
@@ -69,84 +73,40 @@ export default async function AipListPage({
               period may still be `open` — nothing closes it automatically — and
               starting this year's AIP against last year's programme is a
               mistake nobody notices until the export. */}
-          {departmentScoped && period.id === periods[0]?.id ? (
+          {departmentScoped && isCurrentPeriod ? (
             <StartAipButton
               periodId={period.id}
               departmentId={session.department!.id}
               hasAnnual={hasAnnual}
+              startableFunds={startableFunds}
             />
           ) : null}
         </div>
       </div>
 
-      <div className="rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Department</TableHead>
-              <TableHead>Submission</TableHead>
-              <TableHead className="text-right">Items</TableHead>
-              <TableHead className="text-right">PS</TableHead>
-              <TableHead className="text-right">MOOE</TableHead>
-              <TableHead className="text-right">CO</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-24" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="py-14 text-center text-muted-foreground">
-                  No submissions for CY {period.year} yet.
-                </TableCell>
-              </TableRow>
-            ) : null}
-            {grouped.flatMap((group) =>
-              group.submissions.map((aip, index) => (
-              <TableRow key={aip.aip_id}>
-                <TableCell className={cn('font-medium', index > 0 && 'pl-8 text-muted-foreground')}>
-                  {index === 0 ? aip.department_name : ''}
-                </TableCell>
-                <TableCell className={index > 0 ? 'text-muted-foreground' : undefined}>
-                  {submissionLabel(aip)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{aip.ppa_count}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {moneyTotal(aip.total_ps)}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {moneyTotal(aip.total_mooe)}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {moneyTotal(aip.total_co)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-medium tabular-nums">
-                  {moneyTotal(aip.total_amount)}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant="outline">{AIP_STATUS_LABELS[aip.status]}</Badge>
-                    {aip.open_returns > 0 ? (
-                      <Badge variant="outline"
-                             className="border-amber-500/50 text-amber-700 dark:text-amber-400">
-                        {aip.open_returns} returned
-                      </Badge>
-                    ) : null}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Button asChild size="sm" variant="ghost">
-                    <Link href={routes.aip(aip.aip_id) as never}>
-                      Open <ArrowRight className="size-4" />
-                    </Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-              )))}
-          </TableBody>
-        </Table>
-      </div>
+      <SubmissionsTable
+        groups={grouped}
+        emptyMessage={`No submissions for CY ${period.year} yet.`}
+      />
+
+      {/* The statutory funds are a second table and never the same one. Each is
+          its own document with its own review and its own printout, and none of
+          them is part of the annual programme's grand total. */}
+      {groupedStatutory.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-lg font-medium">Statutory funds</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Filed beside the annual programme, not inside it. These figures are not part
+              of the AIP&apos;s grand total.
+            </p>
+          </div>
+          <SubmissionsTable
+            groups={groupedStatutory}
+            emptyMessage="No statutory documents for this year yet."
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

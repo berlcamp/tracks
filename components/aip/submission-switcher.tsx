@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { AIP_STATUS_LABELS } from '@/lib/auth/permissions'
 import { moneyTotal } from '@/lib/format'
 import { routes } from '@/lib/routes'
+import { submissionLabel } from '@/lib/aip/submissions'
 import { cn } from '@/lib/utils'
 import type { AipTotals } from '@/types/tracks'
 
@@ -17,7 +18,9 @@ import type { AipTotals } from '@/types/tracks'
  * them would invent a combined programme that no office ever approved.
  *
  * The combined figure is shown once, at the end, because that is the number
- * people ask for after the supplementals start arriving.
+ * people ask for after the supplementals start arriving. It spans one
+ * programme only — the caller scopes these to a single fund, because adding
+ * the annual AIP to the 20% CDF would state a total nobody approved.
  */
 export function SubmissionSwitcher({
   submissions, currentAipId,
@@ -45,9 +48,7 @@ export function SubmissionSwitcher({
       <ul className="flex flex-wrap gap-2">
         {submissions.map((submission) => {
           const isCurrent = submission.aip_id === currentAipId
-          const label = submission.kind === 'supplemental'
-            ? `Supplemental No. ${submission.supplemental_no}`
-            : 'Annual'
+          const label = submissionLabel(submission)
 
           return (
             <li key={submission.aip_id}>

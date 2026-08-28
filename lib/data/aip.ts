@@ -7,7 +7,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type {
   Aip, AipPeriod, AipTotals, Department, PeriodTotals, PpaRowView,
-  SectorTotals,
+  SectorTotals, StatutoryFund, StatutoryFundTotals,
 } from '@/types/tracks'
 
 export async function getCurrentPeriod(): Promise<AipPeriod | null> {
@@ -74,14 +74,22 @@ export async function listAips(periodId: string): Promise<AipListRow[]> {
 
 export interface AipDetail {
   aip: Aip
+  /** "20% CDF" when this document is a statutory filing, else null. */
+  fundLabel: string | null
   period: AipPeriod
   department: Department
   rows: PpaRowView[]
   totals: AipTotals | null
   /**
-   * The department's other submissions for this period: the annual one and any
-   * supplementals. A supplemental only ever ADDS PPAs — it never amends the
-   * annual AIP's rows — so the two are read side by side rather than merged.
+   * The department's other submissions OF THIS DOCUMENT for the period: the
+   * annual one and any supplementals. A supplemental only ever ADDS PPAs — it
+   * never amends the annual AIP's rows — so the two are read side by side
+   * rather than merged.
+   *
+   * Scoped to the same fund. The switcher states a combined figure, and a
+   * combined figure spanning the annual programme and the 20% CDF would be a
+   * total no office ever approved — the two are separate documents precisely
+   * so that they are never added together.
    */
   siblings: AipTotals[]
 }
@@ -109,11 +117,17 @@ export async function getAipDetail(aipId: string): Promise<AipDetail | null> {
 
   return {
     aip,
+    // Read from the aips row rather than the first PPA, so a statutory document
+    // with nothing in it yet still knows which fund it is — which is exactly
+    // when the first row needs its column (7) filled in.
+    fundLabel: (totals as AipTotals | null)?.fund_label ?? null,
     period,
     department,
     rows: sortWorksheet((rows ?? []) as PpaRowView[]),
     totals: totals ?? null,
-    siblings: sortSubmissions((siblings ?? []) as AipTotals[]),
+    siblings: sortSubmissions(
+      ((siblings ?? []) as AipTotals[])
+        .filter((s) => (s.fund_id ?? null) === (aip.fund_id ?? null))),
   }
 }
 
@@ -122,15 +136,6 @@ export function sortSubmissions(rows: AipTotals[]): AipTotals[] {
   return [...rows].sort((a, b) =>
     (a.kind === b.kind ? 0 : a.kind === 'annual' ? -1 : 1) ||
     (a.supplemental_no ?? 0) - (b.supplemental_no ?? 0))
-}
-
-/** "Annual Investment Program" / "Supplemental AIP No. 2". */
-export function submissionLabel(
-  submission: Pick<AipTotals, 'kind' | 'supplemental_no'>,
-): string {
-  return submission.kind === 'supplemental'
-    ? `Supplemental AIP No. ${submission.supplemental_no}`
-    : 'Annual Investment Program'
 }
 
 /**
@@ -153,9 +158,22 @@ export interface ConsolidatedView {
   periodTotals: PeriodTotals | null
 }
 
+/**
+ * Which document is being consolidated.
+ *
+ * `fundId: null` is the annual investment programme itself — the thing the AIP
+ * form prints. A fund id selects that statutory programme instead, and the two
+ * are never mixed: a statutory document is `kind = 'annual'` as well, so
+ * filtering on kind alone would fold the 20% CDF into the GRAND TOTAL.
+ */
+export interface ConsolidatedTarget {
+  kind: 'annual' | 'supplemental'
+  fundId: string | null
+}
+
 export async function getConsolidated(
   periodId: string,
-  kind: 'annual' | 'supplemental' = 'annual',
+  target: ConsolidatedTarget = { kind: 'annual', fundId: null },
 ): Promise<ConsolidatedView | null> {
   const supabase = await createClient()
 
@@ -163,12 +181,23 @@ export async function getConsolidated(
     .from('aip_periods').select('*').eq('id', periodId).maybeSingle<AipPeriod>()
   if (!period) return null
 
+  const { kind, fundId } = target
+
+  const rowQuery = supabase.from('v_ppa_rows').select('*')
+    .eq('period_id', periodId).eq('aip_kind', kind)
+  const deptQuery = supabase.from('v_aip_totals').select('*')
+    .eq('period_id', periodId).eq('kind', kind)
+  const sectorQuery = supabase.from('v_sector_totals').select('*')
+    .eq('period_id', periodId).eq('kind', kind)
+  const periodQuery = supabase.from('v_period_totals').select('*')
+    .eq('period_id', periodId).eq('kind', kind)
+
   const [{ data: rows }, { data: departmentTotals }, { data: sectorTotals }, { data: periodTotals }] =
     await Promise.all([
-      supabase.from('v_ppa_rows').select('*').eq('period_id', periodId).eq('aip_kind', kind),
-      supabase.from('v_aip_totals').select('*').eq('period_id', periodId).eq('kind', kind),
-      supabase.from('v_sector_totals').select('*').eq('period_id', periodId).eq('kind', kind),
-      supabase.from('v_period_totals').select('*').eq('period_id', periodId).eq('kind', kind)
+      fundId ? rowQuery.eq('fund_id', fundId) : rowQuery.is('fund_id', null),
+      fundId ? deptQuery.eq('fund_id', fundId) : deptQuery.is('fund_id', null),
+      fundId ? sectorQuery.eq('fund_id', fundId) : sectorQuery.is('fund_id', null),
+      (fundId ? periodQuery.eq('fund_id', fundId) : periodQuery.is('fund_id', null))
         .maybeSingle<PeriodTotals>(),
     ])
 

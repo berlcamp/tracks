@@ -34,7 +34,7 @@ import type {
  * cannot do; the database is what actually refuses.
  */
 export function AipWorkspace({
-  aip, period, department, rows, siblings, ctx,
+  aip, period, department, rows, siblings, ctx, fundLabel,
 }: {
   aip: Aip
   period: AipPeriod
@@ -42,6 +42,8 @@ export function AipWorkspace({
   rows: PpaRowView[]
   siblings: AipTotals[]
   ctx: EditContext
+  /** "20% CDF" when this document is a statutory filing, else null. */
+  fundLabel?: string | null
 }) {
   const [editing, setEditing] = useState<PpaRowView | null>(null)
   const [anchor, setAnchor] = useState<PpaRowView | null>(null)
@@ -75,9 +77,13 @@ export function AipWorkspace({
             <span>CY {period.year}</span>
             <span aria-hidden>·</span>
             <span>
-              {aip.kind === 'supplemental'
-                ? `Supplemental AIP No. ${aip.supplemental_no}`
-                : 'Annual Investment Program'}
+              {fundLabel
+                ? (aip.kind === 'supplemental'
+                    ? `${fundLabel} — Supplemental No. ${aip.supplemental_no}`
+                    : fundLabel)
+                : aip.kind === 'supplemental'
+                  ? `Supplemental AIP No. ${aip.supplemental_no}`
+                  : 'Annual Investment Program'}
             </span>
             <Badge variant={badgeVariant(aip.status)}>{AIP_STATUS_LABELS[aip.status]}</Badge>
             {openReturns > 0 ? (
@@ -216,6 +222,7 @@ export function AipWorkspace({
         row={editing}
         anchor={anchor}
         placement={placement}
+        fundLabel={fundLabel ?? null}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
