@@ -398,6 +398,60 @@ Physical progress that was never reported is never rendered as 0%: it is its own
 state, it is left out of the weighted average, and the slide prints how much of
 the programme the average speaks for.
 
+## Demo mode
+
+A whole worked programme year, on the real application, that can be shown to
+people and handed back to its starting state afterwards. Settings → Demo.
+
+- **Demo data lives in its own AIP PERIOD, and that is the entire safety
+  argument.** Everything in `tracks` hangs off `aip_periods` — aips, then ppas,
+  then reviews, returns, revisions, allotments, obligations, disbursements,
+  progress; `aip_actions` off the period directly — so a period is the only
+  boundary a reset can be scoped to and be *structurally* unable to escape.
+  Every statement in `rebuild_demo_data()` filters on `aip_periods.is_demo`,
+  and `11_demo.sql` asserts the negative claim directly: seed it, edit it,
+  reset it, and not one real submission, row or peso moved.
+- **There are NO demo sign-ins.** Whoever is signed in walks the demo. The
+  application still holds nothing but the anon key — no service-role path was
+  added, and none should be. The demo PROFILES carry `auth_user_id = null`:
+  they exist so rows have believable names against them and they can never
+  authenticate, because there is no auth user to authenticate as. Their
+  addresses are on `.invalid`, which RFC 2606 reserves.
+- **Off HIDES the year; it does not delete it.** A toggle that destroys data is
+  one somebody flips by accident, and whoever turns it back on next month wants
+  what they left. Rebuilding is its own button that says what it does.
+- **Hiding is RLS, not a filter in TypeScript**, so the demo year leaves every
+  screen at once — picker, consolidated view, monitoring, Budget's worklist,
+  the deck — with no query edited. `v_ppa_rows`, `v_aip_totals`,
+  `v_sector_totals`, `v_period_totals` and `v_monitoring` are all
+  security_invoker and all start `from tracks.aips`.
+- **BOTH policies on each table carry the predicate, not just the one called
+  `_read`.** `aips_planning_write` and `aip_periods_admin_write` are `FOR ALL`,
+  which includes SELECT, and permissive policies are OR'd — so tightening
+  `aips_read` alone hid the demo from a department head and left it in full
+  view of the City Planning Office, which is the one audience the switch exists
+  for. That bug is what `75a`–`75e` exist to catch.
+- **`ppas_read` is deliberately NOT filtered.** It would put an EXISTS on the
+  hottest read in the application to hide rows already unreachable through
+  every view that renders them. Demo data is not secret; it is noise.
+- **The demo year is in the PAST** (the newest free year at or below 2025).
+  `getCurrentPeriod()` takes the latest year, so a demo dated ahead of the real
+  programme would become the year every screen opened on. It is badged `DEMO`
+  in the year picker and on both document headers.
+- **The period is `consolidating` with an LDC leg that came back**, not
+  `for_ldc`. A demo has to stay editable — that is the point of the reset
+  button — and paper comes back as well as goes out, so a returned Mayor's leg
+  is both truthful and the more useful thing to show.
+- **`ppa_revisions` is NOT deleted by a reset.** It has no DELETE policy for
+  anybody, and a reset that erased the trail would be the one thing in this
+  schema allowed to rewrite history. Old entries point at PPA ids that no
+  longer exist, so nothing renders them.
+- `demo_standing()` is the one deliberate exception to the hiding: the settings
+  panel has to report what is in the demo year *while it is hidden*, which is
+  exactly when somebody is deciding whether to turn it back on. It is
+  SECURITY DEFINER, planning-administrator only, and returns three counts and a
+  title — no row.
+
 ## The app
 
 Next.js 16 App Router, React 19, Tailwind 4, shadcn (radix-nova) — the same
@@ -490,8 +544,8 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 153 unit tests — exporter, template fidelity, grid, permissions, deck, history
-npm run test:db      # 245 SQL tests against a throwaway Postgres.app database
+npm test             # 155 unit tests — exporter, template fidelity, grid, permissions, deck, history
+npm run test:db      # 272 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
 npm run test:e2e     # 53 Playwright tests against the local stack

@@ -276,3 +276,14 @@ export const PERIOD_STATUS_LABELS: Record<PeriodStatus, string> = {
   approved: 'Approved',
   closed: 'Closed',
 }
+
+/**
+ * Mirrors tracks.set_demo_mode() and tracks.rebuild_demo_data(). Demo mode
+ * seeds and hides a whole pretend programme year, so it is the planning
+ * administrator's alone — the same hand that opens and closes a real period.
+ */
+export function canManageDemo(
+  role: UserRole | null, isSuperAdmin: boolean,
+): boolean {
+  return isSuperAdmin || role === 'planning_admin'
+}

@@ -114,6 +114,7 @@ export default async function ConsolidatedPage({
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{period.title}</span>
+            {period.is_demo ? <Badge variant="outline">DEMO</Badge> : null}
             {maySetStatus
               ? null
               : <Badge variant="secondary">{PERIOD_STATUS_LABELS[period.status]}</Badge>}

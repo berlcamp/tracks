@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -36,13 +37,19 @@ export function PeriodPicker({ periods, currentId }: {
           router.push(`${pathname}?${next.toString()}` as never)
         }}
       >
-        <SelectTrigger id="period-picker" className="w-40">
+        <SelectTrigger id="period-picker" className="w-48">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
+          {/* A demo year is badged wherever it is offered. It is the one place
+              somebody could pick it up by mistake and start encoding real work
+              into a programme nobody will ever print. */}
           {periods.map((period) => (
             <SelectItem key={period.id} value={period.id}>
-              CY {period.year}
+              <span>CY {period.year}</span>
+              {period.is_demo ? (
+                <Badge variant="outline" className="ml-1.5">DEMO</Badge>
+              ) : null}
             </SelectItem>
           ))}
         </SelectContent>

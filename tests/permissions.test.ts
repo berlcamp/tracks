@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   canDeleteRow, canEditPpa, canFinalizePeriod, canModifyStructure, canReviewPpa,
-  canAccept, canReopen, canSeeReviewColumn, canSetPeriodStatus, canSubmit,
-  contextForRow, lockOf, ownsRow, reviewStage,
+  canAccept, canManageDemo, canReopen, canSeeReviewColumn, canSetPeriodStatus,
+  canSubmit, contextForRow, lockOf, ownsRow, reviewStage,
   type EditContext, type RowLock, type Viewer,
 } from '@/lib/auth/permissions'
 
@@ -327,5 +327,23 @@ describe('lockOf', () => {
   it('reads the three things the lock turns on off a row of the view', () => {
     expect(lockOf({ is_returned: true, review_status: 'returned', created_by: ME }))
       .toEqual({ isReturned: true, reviewStatus: 'returned', createdBy: ME })
+  })
+})
+
+// Demo mode seeds and hides a whole pretend programme year. Mirrors
+// tracks.set_demo_mode() and tracks.rebuild_demo_data(), both of which check
+// the role in their first statement.
+describe('canManageDemo', () => {
+  it('belongs to the planning administrator, as opening a period does', () => {
+    expect(canManageDemo('planning_admin', false)).toBe(true)
+    expect(canManageDemo(null, true)).toBe(true)
+  })
+
+  it('is closed to everybody else, the sector officer included', () => {
+    for (const role of
+      ['planning_staff', 'dept_head', 'dept_encoder', 'budget', 'accounting', 'viewer'] as const) {
+      expect(canManageDemo(role, false)).toBe(false)
+    }
+    expect(canManageDemo(null, false)).toBe(false)
   })
 })

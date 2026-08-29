@@ -59,6 +59,24 @@ export interface AipPeriod {
   draft_label: string | null
   nta_amount: number | null
   status: PeriodStatus
+  /**
+   * A pretend programme, for showing the application to people. It is hidden
+   * from every screen while demo mode is off — by RLS on `aip_periods` and
+   * `aips`, not by a filter here — and is the only thing
+   * `tracks.rebuild_demo_data()` can reach.
+   */
+  is_demo: boolean
+}
+
+/** The single row of tracks.lgu_settings. */
+export interface LguSettings {
+  id: boolean
+  lgu_name: string
+  lgu_type: string
+  province: string | null
+  region: string | null
+  logo_url: string | null
+  demo_mode: boolean
 }
 
 export interface Aip {

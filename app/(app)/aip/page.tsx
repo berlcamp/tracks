@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge'
 import { requireSession } from '@/lib/auth/session'
 import { getPeriods, listAips, resolvePeriod } from '@/lib/data/aip'
 import { isDepartmentUser } from '@/lib/auth/permissions'
@@ -59,9 +60,12 @@ export default async function AipListPage({
           <h1 className="text-2xl font-semibold tracking-tight">
             {departmentScoped ? 'Our AIP' : 'Submissions'}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            CY {period.year}
-            {departmentScoped ? ` · ${session.department!.display_name}` : ' · all departments'}
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              CY {period.year}
+              {departmentScoped ? ` · ${session.department!.display_name}` : ' · all departments'}
+            </span>
+            {period.is_demo ? <Badge variant="outline">DEMO</Badge> : null}
           </p>
         </div>
 
