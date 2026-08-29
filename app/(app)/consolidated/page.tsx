@@ -213,7 +213,18 @@ export default async function ConsolidatedPage({
         </>
       ) : null}
 
-      <ConsolidatedGrid rows={consolidated.rows} />
+      {/* City Planning corrects a line where it reads it. Every row is judged
+          by the same lock the submission screen uses, and every change lands in
+          the row's history — which is in the same menu, for everybody. */}
+      <ConsolidatedGrid
+        rows={consolidated.rows}
+        viewer={{
+          role: session.role,
+          isSuperAdmin: session.isSuperAdmin,
+          profileId: session.profile.id,
+          departmentId: session.department?.id ?? null,
+        }}
+      />
     </div>
   )
 }

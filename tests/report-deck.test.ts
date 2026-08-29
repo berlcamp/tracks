@@ -8,9 +8,10 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  FIRST_SLIDE, SLIDES, barWidth, compactPeso, count, nextSlide, percent,
-  prevSlide, resolveSlide, slideGroups, slideIndex,
-  type SlideId,
+  CITY_WIDE_SLIDES, FIRST_SLIDE, SLIDES, barWidth, compactPeso, count,
+  isDrilledDown, nextSlide, percent, prevSlide, resolveSlide, slideGroups,
+  slideIndex, slidesFor,
+  type DeckScope, type SlideId,
 } from '@/lib/reports/deck'
 
 describe('the deck', () => {
@@ -138,5 +139,93 @@ describe('bar geometry', () => {
   it('draws nothing rather than dividing by zero', () => {
     expect(barWidth(10, 0)).toBe('0%')
     expect(barWidth(Number.NaN, 100)).toBe('0%')
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// Reading the deck inside one office
+//
+// The dashboard offers these same reports to a department account over its own
+// programme. The scope is not a filter the reader chose, and the two rules
+// below are what keep that honest: a slide must not caption itself "Filtered"
+// for a scope, and a report the database computes city-wide must not be shown
+// under a heading that says one office.
+// ---------------------------------------------------------------------------
+
+const OFFICE: DeckScope = {
+  department_id: '11111111-1111-1111-1111-111111111111',
+  department_name: 'City Engineering Office',
+}
+
+const NO_FILTERS = {
+  sector_id: null, department_id: null,
+  funding_source: null, status: null, barangay: null,
+}
+
+describe('a scoped deck', () => {
+  it('offers every report when there is no scope', () => {
+    expect(slidesFor(null)).toEqual(SLIDES)
+    expect(slidesFor(undefined)).toHaveLength(12)
+  })
+
+  it('withholds the reports that are the city\'s by construction', () => {
+    const ids = slidesFor(OFFICE).map((s) => s.id)
+    expect(ids).toHaveLength(SLIDES.length - CITY_WIDE_SLIDES.length)
+    for (const id of CITY_WIDE_SLIDES) expect(ids).not.toContain(id)
+  })
+
+  it('keeps the deck\'s order in what is left', () => {
+    const ids = slidesFor(OFFICE).map((s) => s.id)
+    expect(ids).toEqual(SLIDES.map((s) => s.id).filter((id) => !CITY_WIDE_SLIDES.includes(id)))
+  })
+
+  it('still has a landing report to open on', () => {
+    expect(slidesFor(OFFICE).map((s) => s.id)).toContain(FIRST_SLIDE)
+  })
+
+  it('groups what is left without repeating a heading', () => {
+    // The dropdown's optgroups. Dropping two slides could leave a group empty
+    // or split one in two, and the same heading twice in a list of ten reads
+    // as a rendering fault.
+    const groups = slideGroups(slidesFor(OFFICE))
+    expect(new Set(groups.map((g) => g.group)).size).toBe(groups.length)
+    for (const group of groups) expect(group.slides.length).toBeGreaterThan(0)
+    expect(groups.flatMap((g) => g.slides.map((s) => s.id)))
+      .toEqual(slidesFor(OFFICE).map((s) => s.id))
+  })
+})
+
+describe('what counts as a drill-down', () => {
+  it('is nothing, when nothing is set', () => {
+    expect(isDrilledDown(NO_FILTERS)).toBe(false)
+    expect(isDrilledDown(NO_FILTERS, OFFICE)).toBe(false)
+  })
+
+  it('is not the office a scoped reader is confined to', () => {
+    // The whole point: `presentation_deck()` sets `filtered` the moment a
+    // department id is passed, and a department account always passes one.
+    expect(isDrilledDown(
+      { ...NO_FILTERS, department_id: OFFICE.department_id }, OFFICE,
+    )).toBe(false)
+  })
+
+  it('is any office, to a reader who was not scoped to one', () => {
+    expect(isDrilledDown({ ...NO_FILTERS, department_id: OFFICE.department_id }))
+      .toBe(true)
+  })
+
+  it('is another office, to a scoped reader', () => {
+    expect(isDrilledDown(
+      { ...NO_FILTERS, department_id: '22222222-2222-2222-2222-222222222222' },
+      OFFICE,
+    )).toBe(true)
+  })
+
+  it('is any of the other four, scope or no scope', () => {
+    for (const key of ['sector_id', 'funding_source', 'status', 'barangay'] as const) {
+      expect(isDrilledDown({ ...NO_FILTERS, [key]: 'x' }, OFFICE)).toBe(true)
+      expect(isDrilledDown({ ...NO_FILTERS, [key]: 'x' })).toBe(true)
+    }
   })
 })

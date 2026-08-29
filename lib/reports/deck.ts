@@ -88,9 +88,13 @@ export function prevSlide(id: SlideId): SlideId | null {
   return i > 0 ? SLIDES[i - 1]?.id ?? null : null
 }
 
-export function slideGroups(): Array<{ group: SlideDef['group']; slides: SlideDef[] }> {
+/** The contents rail's headings, and the report dropdown's optgroups. A group
+ *  is contiguous in SLIDES, so a heading never appears twice. */
+export function slideGroups(
+  slides: SlideDef[] = SLIDES,
+): Array<{ group: SlideDef['group']; slides: SlideDef[] }> {
   const out: Array<{ group: SlideDef['group']; slides: SlideDef[] }> = []
-  for (const slide of SLIDES) {
+  for (const slide of slides) {
     const last = out.at(-1)
     if (last && last.group === slide.group) last.slides.push(slide)
     else out.push({ group: slide.group, slides: [slide] })
@@ -212,3 +216,77 @@ export const ORIGIN_RULE =
   'Classified from the wording of column (7): a national agency, grant or loan ' +
   'reads as external; the general fund, the NTA share and the statutory funds ' +
   'read as local. Anything else is left unclassified rather than guessed.'
+
+// ---------------------------------------------------------------------------
+// Reading the deck inside one office
+// ---------------------------------------------------------------------------
+
+/**
+ * The office a reader is confined to.
+ *
+ * The presentation deck at /planning/reports is the city's programme and has
+ * no scope. The same reports on the dashboard are offered to a department
+ * account, and there the office is not a filter the reader chose — it is the
+ * only programme they have. `tracks.presentation_deck()` cannot tell the two
+ * apart: it sets `filtered` the moment `p_department_id` is passed, which is
+ * the right rule for a drill-down and the wrong caption for a scope. So the
+ * scope is stated separately, on the slide, and `filtered` is left to mean
+ * what it has always meant — the reader narrowed this further.
+ */
+export interface DeckScope {
+  department_id: string
+  department_name: string
+}
+
+/**
+ * The two reports that are the CITY'S by construction, and cannot be read as
+ * one office's.
+ *
+ * `presentation_deck()` computes ten of its twelve reports over `visible` —
+ * the rows left after the drill-downs — but `resources` and `trend` are built
+ * from `aip_periods`, `v_period_totals` and `v_statutory_fund_totals` and
+ * never see the department filter at all. That is right for what they are: the
+ * National Tax Allotment and the statutory bases are the city's figures and
+ * belong to no office, and the multi-year series is the whole programme's. It
+ * also means neither narrows when a scope is applied, so neither may be
+ * offered inside one — a department head reading the city's NTA gap under a
+ * heading that says "your office" is worse than not having the report.
+ *
+ * This is a presentation rule, not an access control one. `ppas_read` is
+ * `is_provisioned()`: the database lets every provisioned account read every
+ * office's rows, because the consolidated view and the execution ledger need
+ * exactly that. Scoping is about what a screen CLAIMS its totals are.
+ */
+export const CITY_WIDE_SLIDES: SlideId[] = ['resources', 'trends']
+
+/** The reports that can honestly be shown under a given scope. */
+export function slidesFor(scope: DeckScope | null | undefined): SlideDef[] {
+  if (!scope) return SLIDES
+  return SLIDES.filter((slide) => !CITY_WIDE_SLIDES.includes(slide.id))
+}
+
+/**
+ * Whether the reader narrowed the document BEYOND the scope they are in.
+ *
+ * A department account whose office filter is its own office has chosen
+ * nothing; the same filter set to any other office, or any of the other four,
+ * is a drill-down and every total on screen is captioned accordingly.
+ */
+export function isDrilledDown(
+  filters: {
+    sector_id: string | null
+    department_id: string | null
+    funding_source: string | null
+    status: string | null
+    barangay: string | null
+  },
+  scope: DeckScope | null = null,
+): boolean {
+  return Boolean(
+    filters.sector_id
+    || filters.funding_source
+    || filters.status
+    || filters.barangay
+    || (filters.department_id && filters.department_id !== scope?.department_id),
+  )
+}

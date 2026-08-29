@@ -143,6 +143,31 @@ export interface PpaRowView {
   fund_label: string | null
 }
 
+/**
+ * A row of tracks.v_ppa_revisions — one change to one PPA row.
+ *
+ * Written by trigger on every insert, update and delete of `tracks.ppas`, so
+ * nothing that touches a row of the programme can miss it. `changed_role` is
+ * the capacity the change was made in, stamped at the moment of the write:
+ * null on anything recorded before 0018, and on anything the service role did.
+ */
+export interface PpaRevision {
+  id: number
+  ppa_id: string
+  aip_id: string
+  action: 'create' | 'update' | 'delete'
+  changed_fields: string[]
+  old_values: Record<string, unknown> | null
+  new_values: Record<string, unknown> | null
+  changed_by: string | null
+  changed_by_name: string | null
+  changed_role: UserRole | null
+  changed_at: string
+  row_kind: PpaRowKind | null
+  department_id: string | null
+  department_name: string | null
+}
+
 /** A row of tracks.v_aip_totals. */
 export interface AipTotals {
   aip_id: string

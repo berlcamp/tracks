@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowDownToLine, ArrowUpToLine, Check, CheckCircle2, ChevronDown,
-  CircleDashed, Filter, Pencil, Plus, Trash2, Undo2,
+  CircleDashed, Filter, History, Pencil, Plus, Trash2, Undo2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -56,6 +56,12 @@ export interface AipGridProps {
   onEdit?: (row: PpaRowView) => void
   onDelete?: (row: PpaRowView) => void
   onReview?: (row: PpaRowView, decision: ReviewDecision) => void
+  /**
+   * Open the row's audit trail. Passing it puts "History" in every row's menu:
+   * the trail is written by trigger on every change, and it is readable by
+   * anyone provisioned, so there is no row on which it is withheld.
+   */
+  onHistory?: (row: PpaRowView) => void
 }
 
 const HEAD = [
@@ -79,7 +85,7 @@ const CELL = 'border border-border/70 px-2 py-1.5 align-top'
 export function AipGrid({
   rows, canEdit, canAddRow, canDelete, canReview = false,
   showReviewColumn = false, showAuthorColumn = false,
-  showDepartmentBands = true, onAdd, onEdit, onDelete, onReview,
+  showDepartmentBands = true, onAdd, onEdit, onDelete, onReview, onHistory,
 }: AipGridProps) {
   const [query, setQuery] = useState('')
 
@@ -93,8 +99,8 @@ export function AipGrid({
   // returned AIP that is true for the returned rows alone, which is why canEdit
   // is consulted rather than canAddRow on its own.
   const interactive = useMemo(
-    () => canAddRow || canReview || filtered.some(canEdit),
-    [canAddRow, canReview, filtered, canEdit],
+    () => canAddRow || canReview || onHistory !== undefined || filtered.some(canEdit),
+    [canAddRow, canReview, onHistory, filtered, canEdit],
   )
   const columnCount = HEAD.length
     + (interactive ? 1 : 0)
@@ -115,6 +121,7 @@ export function AipGrid({
           onEdit={onEdit}
           onDelete={onDelete}
           onReview={onReview}
+          onHistory={onHistory}
         />
       </td>
     )
@@ -320,7 +327,7 @@ export function AipGrid({
  */
 function RowMenu({
   row, canEditRow, canModifyStructure, canDeleteRow, canReview,
-  onAdd, onEdit, onDelete, onReview,
+  onAdd, onEdit, onDelete, onReview, onHistory,
 }: {
   row: PpaRowView
   canEditRow: boolean
@@ -331,9 +338,12 @@ function RowMenu({
   onEdit?: (row: PpaRowView) => void
   onDelete?: (row: PpaRowView) => void
   onReview?: (row: PpaRowView, decision: ReviewDecision) => void
+  onHistory?: (row: PpaRowView) => void
 }) {
   const label = row.row_kind === 'header' ? row.description : `item ${row.item_no}`
-  if (!canEditRow && !canModifyStructure && !canDeleteRow && !canReview) return null
+  if (!canEditRow && !canModifyStructure && !canDeleteRow && !canReview && !onHistory) {
+    return null
+  }
 
   return (
     <DropdownMenu>
@@ -373,6 +383,15 @@ function RowMenu({
             {canModifyStructure ? <DropdownMenuSeparator /> : null}
             <DropdownMenuItem onSelect={() => onEdit?.(row)}>
               <Pencil className="size-4" /> Edit row
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {onHistory ? (
+          <>
+            {canEditRow || canModifyStructure || canReview ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuItem onSelect={() => onHistory(row)}>
+              <History className="size-4" /> History
             </DropdownMenuItem>
           </>
         ) : null}

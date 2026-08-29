@@ -363,6 +363,16 @@ export interface PresentationDeck {
     barangays: DeckOption[]
     stages: DeckOption[]
   }
+  /**
+   * The office the reader is confined to, or null for the city's programme.
+   *
+   * Set here rather than in SQL because the database has no notion of it:
+   * `presentation_deck()` is handed a department id and cannot tell a
+   * planning officer drilling into one office from a department account that
+   * has only ever had one. `loadDeckRequest` knows which it is, so it states
+   * the scope and leaves `filtered` meaning what it always meant.
+   */
+  scope?: DeckScope | null
 }
 
 /**
@@ -467,7 +477,7 @@ export async function getPortfolio(
 import type { AipPeriod, StatutoryFundTotals } from '@/types/tracks'
 import { getPeriods, resolvePeriod } from '@/lib/data/aip'
 import { getFundTotals } from '@/lib/data/statutory'
-import { resolveSlide, type SlideId } from '@/lib/reports/deck'
+import { isDrilledDown, resolveSlide, type DeckScope, type SlideId } from '@/lib/reports/deck'
 
 export interface DeckQuery {
   period?: string
@@ -490,6 +500,23 @@ export interface DeckRequest {
   portfolio: PresentationPpaRow[]
   slideId: SlideId
   hasSupplementals: boolean
+  /** The office the reader was confined to, or null for the city's programme. */
+  scope: DeckScope | null
+}
+
+export interface DeckRequestOptions {
+  /**
+   * Confine the whole read to one office.
+   *
+   * This is NOT a filter the reader picked, and the URL cannot reach it: `?office=`
+   * is ignored while a scope is set. `ppas_read` is `is_provisioned()` — the
+   * database lets any provisioned account read every office's rows, because the
+   * consolidated view and the execution ledger need exactly that — so a
+   * department account is held to its own programme HERE, on the server, before
+   * the RPC is called. Nothing scoped is ever fetched and then filtered on the
+   * client.
+   */
+  scope?: DeckScope | null
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -511,8 +538,12 @@ function textOrNull(value: string | undefined): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-/** Everything both routes need, or null when there is no programme year. */
-export async function loadDeckRequest(q: DeckQuery): Promise<DeckRequest | null> {
+/** Everything every deck surface needs, or null when there is no programme year. */
+export async function loadDeckRequest(
+  q: DeckQuery,
+  options: DeckRequestOptions = {},
+): Promise<DeckRequest | null> {
+  const scope = options.scope ?? null
   const [period, periods] = await Promise.all([resolvePeriod(q.period), getPeriods()])
   if (!period) return null
 
@@ -525,7 +556,9 @@ export async function loadDeckRequest(q: DeckQuery): Promise<DeckRequest | null>
 
   const filters: DeckFilters = {
     sectorId: uuidOrNull(q.sector),
-    departmentId: uuidOrNull(q.office),
+    // The scope wins outright. A department account hand-editing `?office=` to
+    // another department's id gets its own office back, not that one's figures.
+    departmentId: scope ? scope.department_id : uuidOrNull(q.office),
     fundingSource: textOrNull(q.source),
     barangay: textOrNull(q.barangay),
     status: textOrNull(q.status),
@@ -540,6 +573,14 @@ export async function loadDeckRequest(q: DeckQuery): Promise<DeckRequest | null>
   ])
   if (!deck) return null
 
+  // The scope is stated, and `filtered` is corrected to mean what it means
+  // everywhere else in this application: the reader narrowed the document
+  // themselves. `presentation_deck()` set it true the moment a department id
+  // was passed, which is right for a drill-down and wrong for the only
+  // programme an office has. A boolean, not a figure — no total is touched.
+  deck.scope = scope
+  if (scope) deck.filtered = isDrilledDown(deck.filters, scope)
+
   return {
     period,
     periods,
@@ -548,5 +589,6 @@ export async function loadDeckRequest(q: DeckQuery): Promise<DeckRequest | null>
     portfolio,
     slideId: resolveSlide(q.slide),
     hasSupplementals: (supplementals ?? []).length > 0,
+    scope,
   }
 }

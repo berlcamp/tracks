@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireSession } from '@/lib/auth/session'
 import { getCurrentPeriod, listAips } from '@/lib/data/aip'
+import { loadDeckRequest } from '@/lib/data/presentation'
+import { ReportPanel } from '@/components/reports/report-panel'
 import { AIP_STATUS_LABELS, PERIOD_STATUS_LABELS, isDepartmentUser, isPlanning } from '@/lib/auth/permissions'
 import { moneyTotal } from '@/lib/format'
 import { routes } from '@/lib/routes'
@@ -24,6 +26,27 @@ export default async function DashboardPage() {
   }
 
   const aips = await listAips(period.id)
+
+  // The dashboard's reports are the presentation deck's, over the current
+  // year's annual programme.
+  //
+  // A department account reads them over its own office and nothing else. That
+  // scope is applied HERE, on the server, before `presentation_deck()` is
+  // called — `ppas_read` is `is_provisioned()`, so the database would hand a
+  // department head every office's rows, exactly as it must for the
+  // consolidated view and the execution ledger. A department user with no
+  // office on record gets no reports at all rather than the city's: there is
+  // no programme that is theirs to show.
+  const scoped = isDepartmentUser(session.role) && !session.isSuperAdmin
+  const scope = scoped && session.department
+    ? {
+        department_id: session.department.id,
+        department_name: session.department.display_name,
+      }
+    : null
+  const deckRequest = scoped && !scope
+    ? null
+    : await loadDeckRequest({ period: period.id }, { scope })
   const mine = session.department
     ? aips.filter((a) => a.department_id === session.department!.id)
     : []
@@ -93,6 +116,22 @@ export default async function DashboardPage() {
                 </div>
               ))
             )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {deckRequest ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Reports</CardTitle>
+            <CardDescription>
+              {scope
+                ? `${scope.department_name} — CY ${period.year}.`
+                : `The Annual Investment Program for CY ${period.year}.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ReportPanel deck={deckRequest.deck} portfolio={deckRequest.portfolio} />
           </CardContent>
         </Card>
       ) : null}

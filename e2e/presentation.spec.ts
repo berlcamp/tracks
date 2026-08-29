@@ -103,7 +103,9 @@ test.describe('the AIP presentation', () => {
 
   test('a viewer may present it and a department user may not', async ({ page }) => {
     // The same readership as the Consolidated AIP. An office has no call to
-    // present the city's programme; its own figures are on its AIP screen.
+    // present the CITY's programme — it reads these same twelve reports over
+    // its own office on the dashboard, which is what dashboard-reports.spec.ts
+    // covers.
     await signIn(page, VIEWER_EMAIL)
     await page.goto('/planning/reports')
     await expect(page.getByRole('heading', { name: 'Executive Summary' })).toBeVisible()

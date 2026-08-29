@@ -10,6 +10,7 @@ import { ReopenDialog } from './reopen-dialog'
 import { ReviewDialog } from './review-dialog'
 import { SubmissionSwitcher } from './submission-switcher'
 import { PpaDialog } from './ppa-dialog'
+import { RowHistoryDialog } from './row-history'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -19,8 +20,8 @@ import { deletePpa } from '@/app/actions/ppa'
 import { moneyTotal } from '@/lib/format'
 import {
   AIP_STATUS_LABELS, canAccept, canDeleteRow, canEditPpa, canModifyStructure,
-  canReopen, canReviewPpa, canSeeReviewColumn, canSubmit, reviewStage,
-  type EditContext, type RowLock,
+  canReopen, canReviewPpa, canSeeReviewColumn, canSubmit, lockOf, reviewStage,
+  type EditContext,
 } from '@/lib/auth/permissions'
 import { routes } from '@/lib/routes'
 import type {
@@ -54,6 +55,8 @@ export function AipWorkspace({
   const [decision, setDecision] = useState<ReviewDecision>('approved')
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reopenOpen, setReopenOpen] = useState(false)
+  const [history, setHistory] = useState<PpaRowView | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   const openReturns = rows.filter((row) => row.is_returned).length
@@ -215,6 +218,7 @@ export function AipWorkspace({
         onReview={(row, next) => {
           setReviewing(row); setDecision(next); setReviewOpen(true)
         }}
+        onHistory={(row) => { setHistory(row); setHistoryOpen(true) }}
       />
 
       <PpaDialog
@@ -226,6 +230,8 @@ export function AipWorkspace({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
+      <RowHistoryDialog row={history} open={historyOpen} onOpenChange={setHistoryOpen} />
+
       <ReviewDialog
         row={reviewing}
         decision={decision}
@@ -281,15 +287,6 @@ export function AipWorkspace({
       </AlertDialog>
     </div>
   )
-}
-
-/** The three things the lock turns on, read off the row. */
-function lockOf(row: PpaRowView): RowLock {
-  return {
-    isReturned: row.is_returned,
-    reviewStatus: row.review_status,
-    createdBy: row.created_by,
-  }
 }
 
 function badgeVariant(status: Aip['status']) {

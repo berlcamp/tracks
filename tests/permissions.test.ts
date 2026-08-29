@@ -7,9 +7,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   canDeleteRow, canEditPpa, canFinalizePeriod, canModifyStructure, canReviewPpa,
-  canAccept, canReopen, canSeeReviewColumn, canSetPeriodStatus, canSubmit, ownsRow,
-  reviewStage,
-  type EditContext, type RowLock,
+  canAccept, canReopen, canSeeReviewColumn, canSetPeriodStatus, canSubmit,
+  contextForRow, lockOf, ownsRow, reviewStage,
+  type EditContext, type RowLock, type Viewer,
 } from '@/lib/auth/permissions'
 
 /** A row this viewer wrote, unread and not returned, unless said otherwise. */
@@ -230,5 +230,102 @@ describe('canFinalizePeriod', () => {
   it('cannot be given twice', () => {
     expect(canFinalizePeriod('planning_admin', false, 'for_ldc')).toBe(false)
     expect(canFinalizePeriod('planning_admin', false, 'closed')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The consolidated view: one screen, every office's document
+// ---------------------------------------------------------------------------
+//
+// City Planning corrects a line where it reads it. The lock is asked per ROW
+// there, not per screen — each row carries its own AIP's status and its own
+// office — so these assert that `contextForRow` hands `canEditPpa` the same
+// three facts a submission screen hands it, and gets the same answer.
+
+const PLANNING: Viewer = {
+  role: 'planning_staff', isSuperAdmin: false, profileId: 'profile-plan',
+  departmentId: null,
+}
+const ENCODER: Viewer = {
+  role: 'dept_encoder', isSuperAdmin: false, profileId: ME, departmentId: 'dep-cmo',
+}
+
+/** A row of v_ppa_rows, as the consolidated grid receives it. */
+function gridRow(overrides: Partial<{
+  aip_status: EditContext['aipStatus']
+  department_id: string
+  period_status: EditContext['periodStatus']
+  is_returned: boolean
+  review_status: RowLock['reviewStatus']
+  created_by: string | null
+}> = {}) {
+  return {
+    aip_status: 'submitted' as const,
+    department_id: 'dep-cho',
+    period_status: 'consolidating' as const,
+    is_returned: false,
+    review_status: 'pending' as RowLock['reviewStatus'],
+    created_by: SOMEONE_ELSE,
+    ...overrides,
+  }
+}
+
+describe('contextForRow', () => {
+  it('pairs the viewer with the document the row is actually in', () => {
+    const r = gridRow({ aip_status: 'accepted', department_id: 'dep-cho' })
+    expect(contextForRow(PLANNING, r)).toEqual({
+      role: 'planning_staff',
+      isSuperAdmin: false,
+      profileId: 'profile-plan',
+      departmentId: null,
+      aipStatus: 'accepted',
+      aipDepartmentId: 'dep-cho',
+      periodStatus: 'consolidating',
+    })
+  })
+
+  it('lets City Planning edit any office\'s row from the consolidated view', () => {
+    for (const status of ['draft', 'submitted', 'returned', 'accepted'] as const) {
+      const r = gridRow({ aip_status: status })
+      expect(canEditPpa(contextForRow(PLANNING, r), lockOf(r))).toBe(true)
+    }
+  })
+
+  it('lets the administrator edit it too — both planning roles, one rule', () => {
+    const admin: Viewer = { ...PLANNING, role: 'planning_admin' }
+    const r = gridRow({ review_status: 'approved' })
+    expect(canEditPpa(contextForRow(admin, r), lockOf(r))).toBe(true)
+  })
+
+  it('still stops once the programme has left the office', () => {
+    for (const period of ['for_ldc', 'for_mayor', 'for_council', 'approved', 'closed'] as const) {
+      const r = gridRow({ period_status: period })
+      expect(canEditPpa(contextForRow(PLANNING, r), lockOf(r))).toBe(false)
+    }
+  })
+
+  it('offers nothing to a reader who is not City Planning', () => {
+    const r = gridRow()
+    expect(canEditPpa(contextForRow(ENCODER, r), lockOf(r))).toBe(false)
+    for (const role of ['budget', 'accounting', 'viewer'] as const) {
+      const reader: Viewer = { ...PLANNING, role }
+      expect(canEditPpa(contextForRow(reader, r), lockOf(r))).toBe(false)
+    }
+  })
+
+  it('does not open another office\'s row to a department encoder', () => {
+    const own = gridRow({
+      aip_status: 'draft', department_id: 'dep-cmo', created_by: ME,
+    })
+    expect(canEditPpa(contextForRow(ENCODER, own), lockOf(own))).toBe(true)
+    const theirs = gridRow({ aip_status: 'draft', department_id: 'dep-cho', created_by: ME })
+    expect(canEditPpa(contextForRow(ENCODER, theirs), lockOf(theirs))).toBe(false)
+  })
+})
+
+describe('lockOf', () => {
+  it('reads the three things the lock turns on off a row of the view', () => {
+    expect(lockOf({ is_returned: true, review_status: 'returned', created_by: ME }))
+      .toEqual({ isReturned: true, reviewStatus: 'returned', createdBy: ME })
   })
 })

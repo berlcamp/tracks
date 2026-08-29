@@ -7,7 +7,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type {
   Aip, AipPeriod, AipTotals, Department, PeriodTotals, PpaRowView,
-  SectorTotals, StatutoryFund, StatutoryFundTotals,
+  PpaRevision, SectorTotals, StatutoryFund, StatutoryFundTotals,
 } from '@/types/tracks'
 
 export async function getCurrentPeriod(): Promise<AipPeriod | null> {
@@ -208,4 +208,23 @@ export async function getConsolidated(
     sectorTotals: (sectorTotals ?? []) as SectorTotals[],
     periodTotals: periodTotals ?? null,
   }
+}
+
+/**
+ * Every change ever made to one row of the programme, newest first.
+ *
+ * Read through the RLS-bound client like everything else here: `v_ppa_revisions`
+ * is security_invoker, so `ppa_revisions_read` still judges it and this
+ * function grants nobody anything. The trail is append-only in the database —
+ * there is no UPDATE policy and no DELETE policy on `ppa_revisions`, for
+ * anyone — so what comes back is what happened.
+ */
+export async function getRowHistory(ppaId: string): Promise<PpaRevision[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('v_ppa_revisions').select('*')
+    .eq('ppa_id', ppaId)
+    .order('changed_at', { ascending: false })
+    .order('id', { ascending: false })
+  return (data ?? []) as PpaRevision[]
 }

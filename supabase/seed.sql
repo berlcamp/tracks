@@ -120,6 +120,57 @@ from a, (values
 where not exists (select 1 from tracks.ppas p where p.aip_id = (select aip_id from a));
 
 -- ---------------------------------------------------------------------------
+-- A supplemental for the same office and year.
+--
+-- Not decoration: a great deal of the application only exists in the presence
+-- of a SECOND document for one office in one year, and none of it renders on a
+-- stack that has a single annual AIP — the submission switcher and its
+-- combined figure, the Annual / Supplementals tab above the consolidated grid,
+-- `?kind=supplemental` consolidating them as their own document. A local
+-- database without one hides every rule about how the two are kept apart.
+--
+-- It only ADDS rows, which is what a supplemental is: there is no realignment
+-- to model and no before/after to print, so nothing here amends a figure in
+-- the annual programme above. Its money is a document of its own and is never
+-- folded into the annual GRAND TOTAL.
+-- ---------------------------------------------------------------------------
+
+with per as (select id from tracks.aip_periods where year = 2027),
+     dep as (select id from tracks.departments where code = 'CMO')
+insert into tracks.aips (period_id, department_id, kind, supplemental_no, status)
+select per.id, dep.id, 'supplemental', 1, 'draft' from per, dep
+on conflict do nothing;
+
+with a as (
+  select a.id as aip_id, a.department_id from tracks.aips a
+  join tracks.departments d on d.id = a.department_id
+  join tracks.aip_periods p on p.id = a.period_id
+  where d.code = 'CMO' and p.year = 2027
+    and a.kind = 'supplemental' and a.supplemental_no = 1
+)
+insert into tracks.ppas (aip_id, department_id, row_kind, description,
+                         implementing_office, start_date, end_date, expected_output,
+                         funding_source, amount_ps, amount_mooe, amount_fe, amount_co,
+                         ref_code, sort_order)
+select a.aip_id, a.department_id, v.row_kind, v.description,
+       v.office, v.starts, v.ends, v.expected_output,
+       v.funding, v.ps, v.mooe, 0, v.co, v.ref_code, v.sort_order
+from a, (values
+  ('ppa', 'Acquisition of One (1) Unit Rescue Vehicle',
+   'City Mayor''s Office', date '2027-07-01', date '2027-12-31',
+   'Procured one rescue vehicle for the City Disaster Risk Reduction Office', 'GF',
+   0.00::numeric, 0.00::numeric, 12000000.00::numeric,
+   '1000-000-2-1-01-001-002-001', 1),
+  ('ppa', 'Additional Support to the City Peace and Order Council',
+   'City Mayor''s Office', date '2027-07-01', date '2027-12-31',
+   'Conducted additional peace and order activities in the second semester', 'GF',
+   0.00, 2500000.00, 0.00,
+   '1000-000-2-1-01-001-002-002', 2)
+) as v(row_kind, description, office, starts, ends, expected_output, funding,
+       ps, mooe, co, ref_code, sort_order)
+where not exists (select 1 from tracks.ppas p where p.aip_id = (select aip_id from a));
+
+-- ---------------------------------------------------------------------------
 -- Statutory funds.
 --
 -- The four the office files beside the annual programme. No department

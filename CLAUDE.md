@@ -171,6 +171,47 @@ strictly would have frozen every pre-existing row out of reach on the day
 `0014` was applied. `v_ppa_rows.author_name` drives the "Encoded by" column,
 which like the review column is on screen only and never printed.
 
+## City Planning edits, and the trail says so
+
+City Planning has always been able to correct any office's row — `can_edit_ppa`
+returns true for `is_planning()` at every AIP status, up to and including
+`accepted`, while the period is `open` or `consolidating`. What changed in
+`0018` is where that is offered and whether anyone can see what was done.
+
+- **The Consolidated AIP is editable.** It was flatly read-only, on the
+  reasoning that an overwrite made there — two thousand rows on screen, no
+  submission context — gets noticed a month later. The office consolidates from
+  that screen, and correcting a line meant leaving it. The lock is asked **per
+  row**, not per screen: each row carries its own AIP's status and its own
+  office, so `contextForRow(viewer, row)` hands `canEditPpa` the same three
+  facts a submission screen hands it. Budget, Accounting and a viewer get no
+  Edit, because the same function says no.
+- **Adding and deleting stay on the submission screen.** A row's existence is
+  the office's submission; its figures are what City Planning consolidates.
+- **The period lock is untouched.** Once the programme has gone to the LDC
+  nobody edits, City Planning included.
+- **Every change is on the record, and the record is readable.**
+  `ppa_revisions` is written by TRIGGER on every insert, update and delete of
+  `ppas`, so a change made through a route nobody remembered to instrument is
+  in it too. `0018` adds `changed_role` — the capacity the change was made in,
+  stamped at the moment of the write rather than joined from `user_roles`
+  later, because a role can be reassigned and a trail that re-read it would
+  rewrite its own history. Null on anything recorded before `0018`, and the
+  panel says so rather than guessing.
+- **History is in every row's menu, on both grids, for everyone provisioned.**
+  `ppa_revisions_read` is `is_provisioned()`, so the office whose figure was
+  overwritten reads who overwrote it, from what, to what. An audit trail only
+  the overwriter can see is not one. The trail has no UPDATE and no DELETE
+  policy for anybody, planning administrator included, and `ppa_revisions.ppa_id`
+  is deliberately **not** a foreign key — the point of the trail is the row that
+  is no longer there.
+- **`lib/aip/history.ts` turns a revision into a sentence** and is where
+  `amount_mooe` becomes "MOOE (9)". A revision whose only changed column is
+  `sort_order` reads "Moved in the document": inserting above a row shifts every
+  row beneath it, and reporting fourteen of those as "changed" would bury the
+  one edit that mattered. Like the review and "Encoded by" columns, the trail is
+  on screen only and is never printed.
+
 ## The submission lock
 The rule the whole department workflow turns on, and the one most likely to be
 broken by a later change:
@@ -295,6 +336,37 @@ Mayor, the LDC and the City Council. It reads and never writes.
   formatter passed to a chart is a function, and a function cannot cross the
   server/client boundary. Without it the interactive deck worked and
   `?print=all` — reached straight from a server component — returned a 500.
+- **The same reports are on the dashboard, scoped.** `/planning/reports` is
+  the city's programme and is closed to a department account. The dashboard
+  offers those reports to every provisioned reader — one dropdown instead of a
+  contents rail, no presentation mode and no printing — and a department
+  account reads them over **its own office and nothing else**.
+  - The scope is applied in `loadDeckRequest({ scope })`, on the server, before
+    the RPC is called. It is not RLS and must not be mistaken for it:
+    `ppas_read` is `is_provisioned()`, so the database hands every provisioned
+    account every office's rows — as the consolidated view and the execution
+    ledger require. `?office=` is ignored outright while a scope is set.
+  - **A scope is not a drill-down, and is not captioned as one.**
+    `presentation_deck()` sets `filtered` the moment `p_department_id` is
+    passed, which is right for a planning officer narrowing the city's
+    programme and wrong for the only programme an office has. `isDrilledDown()`
+    corrects the flag and `ScopeNote` states whose figures these are, on every
+    slide — a head comparing this grand total against the consolidated AIP has
+    to be able to see there that the two are different documents.
+  - **Ten of the twelve reports narrow; two do not.** `resources` and `trend`
+    are built from `aip_periods`, `v_period_totals` and
+    `v_statutory_fund_totals` and never see the department filter. That is
+    right for what they are — the NTA and the statutory bases belong to no
+    office and the multi-year series is the whole programme's — so
+    `slidesFor(scope)` withholds them inside one rather than showing city
+    figures under an office's heading. The panel says how many reports there
+    are and why. The Decision Summary's Funding column carries three of the
+    same city figures and withholds those three under a scope, keeping the one
+    fact — PPAs with no funding source — that is counted over the rows on
+    screen.
+  - The report is client state, not `?slide=`: the whole deck arrives in one
+    payload, so changing report costs no round trip. The presenter's deck keeps
+    the URL parameter, because a link to slide nine has to be sendable.
 - **Presentation mode is a ROUTE, not an overlay.** `/planning/reports/present`
   lives in its own `(present)` route group with no shell. An overlay was tried
   first and only ever *covers* the sidebar: the rail keeps its place in the tab
@@ -418,11 +490,11 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 118 unit tests — exporter, template fidelity, grid, permissions, deck
-npm run test:db      # 220 SQL tests against a throwaway Postgres.app database
+npm test             # 153 unit tests — exporter, template fidelity, grid, permissions, deck, history
+npm run test:db      # 245 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 46 Playwright tests against the local stack
+npm run test:e2e     # 53 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```

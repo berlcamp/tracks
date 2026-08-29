@@ -158,13 +158,36 @@ export function Columns({ children, ratio = '1fr 1fr' }: {
  * slide behind the Mayor showing a grand total that quietly excluded two
  * sectors would be the same mistake with a larger audience.
  */
-export function FilterNote({ filtered, of }: { filtered: boolean; of: number }) {
+export function FilterNote({ filtered, of }: { filtered: boolean; of?: number | null }) {
   if (!filtered) return null
   return (
     <p className="text-warning-foreground">
       <strong>Filtered.</strong> Every figure on this slide is recomputed over the
-      rows now visible — {of} line{of === 1 ? '' : 's'} of the programme are in the
-      full document.
+      rows now visible
+      {of === undefined || of === null
+        ? '.'
+        : ` — ${of} line${of === 1 ? '' : 's'} of the programme are in the full document.`}
+    </p>
+  )
+}
+
+/**
+ * Whose programme this is, when it is not the city's.
+ *
+ * A department account reads these same twelve reports on its dashboard over
+ * its own office alone. Every total on the slide is then that office's, and a
+ * slide headed "Investment by Sector" showing one bar has to say why — a head
+ * comparing it against the consolidated AIP and finding a different grand
+ * total must be able to see, on the slide, that they are not looking at the
+ * same document.
+ */
+export function ScopeNote({ scope }: { scope: { department_name: string } | null | undefined }) {
+  if (!scope) return null
+  return (
+    <p>
+      <strong className="text-foreground">{scope.department_name}</strong> only.
+      Every figure here is your office&apos;s; the city&apos;s programme is the
+      consolidated AIP.
     </p>
   )
 }

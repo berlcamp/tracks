@@ -40,6 +40,41 @@ export interface EditContext {
   periodStatus: PeriodStatus
 }
 
+/**
+ * Who is looking, independent of any one document.
+ *
+ * The consolidated view spans every office's submission at once, so the lock
+ * cannot be asked once per screen there: each row carries its own AIP status
+ * and its own office. `contextForRow` pairs the viewer with the row's document
+ * so `canEditPpa` answers the same question it answers on a submission screen.
+ */
+export interface Viewer {
+  role: UserRole | null
+  isSuperAdmin: boolean
+  profileId: string | null
+  departmentId: string | null
+}
+
+/** The document facts the lock turns on, as a row of v_ppa_rows carries them. */
+export interface RowDocument {
+  aip_status: AipStatus
+  /** The AIP's office. On `ppas` it is the same column, denormalised. */
+  department_id: string
+  period_status: PeriodStatus
+}
+
+export function contextForRow(viewer: Viewer, row: RowDocument): EditContext {
+  return {
+    role: viewer.role,
+    isSuperAdmin: viewer.isSuperAdmin,
+    profileId: viewer.profileId,
+    departmentId: viewer.departmentId,
+    aipStatus: row.aip_status,
+    aipDepartmentId: row.department_id,
+    periodStatus: row.period_status,
+  }
+}
+
 /** Editing is open only while the programme is still in the building. */
 const EDITABLE_PERIODS: PeriodStatus[] = ['open', 'consolidating']
 
@@ -54,6 +89,19 @@ export interface RowLock {
   reviewStatus: ReviewStatus | null
   /** Author, or null on a row that predates authorship being recorded. */
   createdBy: string | null
+}
+
+/** The three things the lock turns on, read off a row of v_ppa_rows. */
+export function lockOf(row: {
+  is_returned: boolean
+  review_status: ReviewStatus | null
+  created_by: string | null
+}): RowLock {
+  return {
+    isReturned: row.is_returned,
+    reviewStatus: row.review_status,
+    createdBy: row.created_by,
+  }
 }
 
 /**

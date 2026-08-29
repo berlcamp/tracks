@@ -21,7 +21,7 @@
 // the top of charts.tsx. Rankings get horizontal bars, partitions get a donut,
 // years get a line, and a small ordered set gets columns.
 
-import { Columns, DerivedNote, FilterNote, Panel, Slide, StatRow, StatTile }
+import { Columns, DerivedNote, FilterNote, Panel, ScopeNote, Slide, StatRow, StatTile }
   from '@/components/reports/slide-frame'
 import {
   ColumnBarChart, GroupedBarChart, Meter, RankedBarChart, ShareLegend, SharePie,
@@ -56,8 +56,26 @@ function documentEyebrow(deck: PresentationDeck) {
   )
 }
 
+/**
+ * The two things a slide must say about its own totals before anyone quotes
+ * them: whose programme this is, and whether the reader narrowed it further.
+ *
+ * `document_ppa_count` is the whole document's line count and is only stated
+ * for a reader who can see the whole document. Telling a department head that
+ * "1,268 lines are in the full document" when they are scoped to 23 of them
+ * would answer a question they did not ask with a number about somebody else's
+ * office.
+ */
 function filterCaption(deck: PresentationDeck) {
-  return <FilterNote filtered={deck.filtered} of={deck.document_ppa_count} />
+  return (
+    <>
+      <ScopeNote scope={deck.scope} />
+      <FilterNote
+        filtered={deck.filtered}
+        of={deck.scope ? null : deck.document_ppa_count}
+      />
+    </>
+  )
 }
 
 /** A donut and its list, stacked: the ring keeps the height, the list the width. */
@@ -981,30 +999,41 @@ export function DecisionsSlide({ deck }: SlideProps) {
           </ul>
         </Panel>
 
-        <Panel title="Funding">
+        {/* Three of these four facts are the CITY's — the NTA and the statutory
+            bases belong to no office — and are withheld inside one, for the
+            reason `CITY_WIDE_SLIDES` withholds the resources report. Only the
+            unfunded count is counted over the rows on screen. */}
+        <Panel title="Funding"
+               note={deck.scope
+                 ? 'The NTA and the statutory ceilings are the city’s figures and are reported on the consolidated programme.'
+                 : undefined}>
           <ul className="flex flex-col gap-[0.5em]">
             <Fact label="PPAs with no funding source stated"
                   tone={d.unfunded_count > 0 ? 'warning' : 'default'}
                   value={count(d.unfunded_count)}
                   detail={`${compactPeso(d.unfunded_amount)} of the programme`} />
-            <Fact label={r.gap !== null && r.gap < 0
-                    ? 'Programmed beyond the recorded NTA'
-                    : 'NTA not yet programmed'}
-                  tone={r.gap !== null && r.gap < 0 ? 'warning' : 'default'}
-                  value={r.gap === null ? 'No NTA on record' : compactPeso(Math.abs(r.gap))}
-                  detail={r.covered_pct === null
-                    ? 'the year’s NTA has not been entered'
-                    : `${percent(r.covered_pct)} of the NTA is programmed`} />
-            <Fact label="Statutory funds past their stated ceiling"
-                  tone={d.funds_over_ceiling.length > 0 ? 'warning' : 'default'}
-                  value={count(d.funds_over_ceiling.length)}
-                  detail={d.funds_over_ceiling.length > 0
-                    ? d.funds_over_ceiling
-                        .map((f) => `${f.label} over by ${compactPeso(f.over_by)}`).join('; ')
-                    : 'none, of the funds with a base stated'} />
-            <Fact label="Statutory funds with no base stated"
-                  value={count(r.funds_without_base)}
-                  detail="no ceiling can be reported for these" />
+            {deck.scope ? null : (
+              <>
+                <Fact label={r.gap !== null && r.gap < 0
+                        ? 'Programmed beyond the recorded NTA'
+                        : 'NTA not yet programmed'}
+                      tone={r.gap !== null && r.gap < 0 ? 'warning' : 'default'}
+                      value={r.gap === null ? 'No NTA on record' : compactPeso(Math.abs(r.gap))}
+                      detail={r.covered_pct === null
+                        ? 'the year’s NTA has not been entered'
+                        : `${percent(r.covered_pct)} of the NTA is programmed`} />
+                <Fact label="Statutory funds past their stated ceiling"
+                      tone={d.funds_over_ceiling.length > 0 ? 'warning' : 'default'}
+                      value={count(d.funds_over_ceiling.length)}
+                      detail={d.funds_over_ceiling.length > 0
+                        ? d.funds_over_ceiling
+                            .map((f) => `${f.label} over by ${compactPeso(f.over_by)}`).join('; ')
+                        : 'none, of the funds with a base stated'} />
+                <Fact label="Statutory funds with no base stated"
+                      value={count(r.funds_without_base)}
+                      detail="no ceiling can be reported for these" />
+              </>
+            )}
           </ul>
         </Panel>
 

@@ -3,9 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
+import { getRowHistory } from '@/lib/data/aip'
 import { ppaSchema, insertRowSchema } from '@/lib/validations/ppa'
 import { routes } from '@/lib/routes'
 import { fail, type ActionResult } from './types'
+import type { PpaRevision } from '@/types/tracks'
 
 /**
  * A row of the AIP — a line of the programme, or a column-C heading. Both are
@@ -91,6 +93,9 @@ export async function updatePpa(ppaId: string, input: unknown): Promise<ActionRe
     }
 
     revalidatePath(routes.aip(parsed.aipId))
+    // City Planning edits from the consolidated view as well as from the
+    // submission screen, and the row it changed is on both.
+    revalidatePath(routes.consolidated)
     return { ok: true, data: undefined }
   } catch (error) {
     return fail(error)
@@ -160,4 +165,24 @@ function friendly(message: string): string {
     return 'This AIP is locked. You can only change items City Planning returned to you.'
   }
   return message
+}
+
+/**
+ * One row's audit trail.
+ *
+ * `tracks.ppa_revisions` is written by trigger on every insert, update and
+ * delete of `tracks.ppas`, so this is not a log the application maintains and
+ * could forget to write — it is the database's own record of what happened to
+ * the row, and it has no UPDATE or DELETE policy for anybody, planning admin
+ * included. Reading it is an action rather than a page load because the panel
+ * opens on demand: a grid of two thousand rows does not fetch two thousand
+ * histories to show one.
+ */
+export async function ppaHistory(ppaId: string): Promise<ActionResult<PpaRevision[]>> {
+  try {
+    await requireSession()
+    return { ok: true, data: await getRowHistory(ppaId) }
+  } catch (error) {
+    return fail(error)
+  }
 }
