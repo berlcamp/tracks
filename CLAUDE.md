@@ -545,12 +545,18 @@ type scale match.
   they never reached the worklist. `/monitoring` takes a document picker
   (`?fund=`) because a report is read as the programme it belongs to; `/budget`
   stays **one list across every document** with a fund column, because a clerk
-  wants every outstanding OBR in one place. The worklist is **banded by
-  office**, each band closing with that office's subtotal over the rows on
-  screen and marked "(filtered rows only)" when a filter is on — the same rule
-  the AIP grid follows. Those are the execution columns, which no view totals
-  per office and which are never printed; each row's figures still come from
-  `v_ppa_financials` unchanged.
+  wants every outstanding OBR in one place. **Both are banded by office**,
+  through the one `groupByDepartment()`, each band closing with that office's
+  subtotal over the rows on screen and marked "(filtered rows only)" when a
+  filter is on — the same rule the AIP grid follows. Those are the execution
+  columns, which no view totals per office and which are never printed; each
+  row's figures still come from `v_ppa_financials` unchanged. A subtotal's
+  obligation rate is `obligationRate()`, obligated over allotted with a dash
+  where nothing is allotted, because that is what the view states per row and a
+  subtotal has to be the same measure as the column above it. **Physical % is
+  left blank on a subtotal**, never averaged: progress that was never reported
+  is its own state, and counting it as 0% would flatter every office that
+  reports nothing.
 - **Monitoring's fund tabs follow filed documents, not eligibility.** A
   department sees a tab for each fund *its own office has filed*
   (`listFiledFunds`), not the four that exist and not the ones it is merely
@@ -577,7 +583,7 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 160 unit tests — exporter, template fidelity, grid, permissions, deck, history
+npm test             # 163 unit tests — exporter, template fidelity, grid, permissions, deck, history
 npm run test:db      # 272 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database

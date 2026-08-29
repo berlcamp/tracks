@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  budgetStage, countByStage, groupByDepartment,
+  budgetStage, countByStage, groupByDepartment, obligationRate,
   type DepartmentFields, type MoneyFields, type StageInput,
 } from '@/lib/execution/worklist'
 
@@ -72,6 +72,7 @@ describe('groupByDepartment', () => {
       department_id: department,
       department_code: department.toUpperCase(),
       department_name: `Office of ${department}`,
+      sector_id: 'social',
       sector_heading: 'SOCIAL SECTOR',
       approved_amount: 0,
       ...row(overrides),
@@ -114,11 +115,28 @@ describe('groupByDepartment', () => {
                    unpaid_obligations: 50 }),
     ])
     expect(group!.totals).toEqual({
-      approved: 1500, allotted: 1000, obligated: 650, unpaid: 150,
+      approved: 1500, allotted: 1000, obligated: 650, disbursed: 0,
+      unobligated: 0, unpaid: 150,
     })
   })
 
   it('groups only the rows it is handed, so a filter empties a band away', () => {
     expect(groupByDepartment([])).toEqual([])
+  })
+})
+
+describe('obligationRate', () => {
+  it('measures the obligation against the allotment, as the view does per row', () => {
+    expect(obligationRate({ allotted: 1000, obligated: 650 })).toBe('65.00%')
+  })
+
+  it('says nothing rather than 0% where nothing has been released', () => {
+    // A dash, like the row above it. An office with no allotment has not
+    // failed to obligate anything.
+    expect(obligationRate({ allotted: 0, obligated: 0 })).toBeNull()
+  })
+
+  it('reports an obligation beyond the allotment rather than capping it', () => {
+    expect(obligationRate({ allotted: 100, obligated: 150 })).toBe('150.00%')
   })
 })
