@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Filter } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,8 @@ import { moneyTotal } from '@/lib/format'
 import { routes } from '@/lib/routes'
 import { cn } from '@/lib/utils'
 import {
-  STAGE_FILTERS, STAGE_LABELS, budgetStage, countByStage, type BudgetStage,
+  STAGE_FILTERS, STAGE_LABELS, budgetStage, countByStage, groupByDepartment,
+  type BudgetStage,
 } from '@/lib/execution/worklist'
 import type { MonitoringRow } from '@/lib/data/execution'
 
@@ -45,6 +46,13 @@ export function BudgetWorklist({ rows }: { rows: MonitoringRow[] }) {
       )
     })
   }, [rows, query, stage])
+
+  const isFiltered = query.trim() !== '' || stage !== null
+
+  // Banded by office: a clerk works one department's OBRs at a time. The bands
+  // are computed over the VISIBLE rows, so a filter that empties an office
+  // takes its band with it and the count beside the name is what is on screen.
+  const groups = useMemo(() => groupByDepartment(filtered), [filtered])
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -100,46 +108,89 @@ export function BudgetWorklist({ rows }: { rows: MonitoringRow[] }) {
               </TableRow>
             ) : null}
 
-            {filtered.map((row) => {
-              const outstanding = budgetStage(row)
-              return (
-                <TableRow key={row.ppa_id}>
-                  {/* The programmed amount sits under the title rather than in
-                      a column of its own: it is what the row is worth, not a
-                      figure anybody scans down. The three that are scanned are
-                      the ones the offices move. */}
-                  <TableCell className="max-w-[26rem] py-3 align-top font-medium">
-                    <span className="block truncate" title={row.description}>
-                      <span className="text-muted-foreground tabular-nums">{row.item_no}. </span>
-                      {row.description}
+            {groups.map((group) => (
+              <Fragment key={group.department_id}>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="bg-muted/60 py-2 font-semibold">
+                    {group.department_name}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {group.department_code} · {group.sector_heading} ·{' '}
+                      <span className="tabular-nums">{group.rows.length}</span>
+                      {group.rows.length === 1 ? ' PPA' : ' PPAs'}
+                      {group.outstanding > 0 ? (
+                        <>
+                          , <span className="tabular-nums">{group.outstanding}</span> outstanding
+                        </>
+                      ) : ', all settled'}
                     </span>
+                  </TableCell>
+                </TableRow>
+
+                {group.rows.map((row) => {
+                  const outstanding = budgetStage(row)
+                  return (
+                    <TableRow key={row.ppa_id}>
+                      {/* The programmed amount sits under the title rather than in
+                          a column of its own: it is what the row is worth, not a
+                          figure anybody scans down. The three that are scanned are
+                          the ones the offices move. */}
+                      <TableCell className="max-w-[26rem] py-3 align-top font-medium">
+                        <span className="block truncate" title={row.description}>
+                          <span className="text-muted-foreground tabular-nums">{row.item_no}. </span>
+                          {row.description}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                          {row.fund_label ? `${row.fund_label} · ` : ''}programmed{' '}
+                          <span className="font-mono tabular-nums">
+                            {moneyTotal(row.approved_amount)}
+                          </span>
+                        </span>
+                      </TableCell>
+                      <Amount value={row.allotted} />
+                      <Amount value={row.obligated} />
+                      <Amount value={row.unpaid_obligations} />
+                      <TableCell className="align-top">
+                        <StageBadge stage={outstanding} />
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Button asChild size="icon" variant="ghost">
+                          <Link href={routes.budgetPpa(row.ppa_id) as never}>
+                            <ArrowRight className="size-4" />
+                            <span className="sr-only">
+                              Open the ledger for {row.description}
+                            </span>
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {/* The office's own figures, over the rows on screen. A
+                    subtotal that quietly included hidden rows would be worse
+                    than no subtotal, so a filtered one says so — the same rule
+                    the AIP grid follows. */}
+                <TableRow className="bg-muted/30 font-medium hover:bg-muted/30">
+                  <TableCell className="py-2 text-right">
+                    Subtotal · {group.department_code}
+                    {isFiltered ? (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        (filtered rows only)
+                      </span>
+                    ) : null}
                     <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                      {row.department_code}
-                      {row.fund_label ? ` · ${row.fund_label}` : ''} · programmed{' '}
+                      programmed{' '}
                       <span className="font-mono tabular-nums">
-                        {moneyTotal(row.approved_amount)}
+                        {moneyTotal(group.totals.approved)}
                       </span>
                     </span>
                   </TableCell>
-                  <Amount value={row.allotted} />
-                  <Amount value={row.obligated} />
-                  <Amount value={row.unpaid_obligations} />
-                  <TableCell className="align-top">
-                    <StageBadge stage={outstanding} />
-                  </TableCell>
-                  <TableCell className="align-top">
-                    <Button asChild size="icon" variant="ghost">
-                      <Link href={routes.budgetPpa(row.ppa_id) as never}>
-                        <ArrowRight className="size-4" />
-                        <span className="sr-only">
-                          Open the ledger for {row.description}
-                        </span>
-                      </Link>
-                    </Button>
-                  </TableCell>
+                  <Amount value={group.totals.allotted} />
+                  <Amount value={group.totals.obligated} />
+                  <Amount value={group.totals.unpaid} />
+                  <TableCell colSpan={2} />
                 </TableRow>
-              )
-            })}
+              </Fragment>
+            ))}
           </TableBody>
         </Table>
       </div>

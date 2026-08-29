@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
+import { Badge } from '@/components/ui/badge'
 import { requireRole } from '@/lib/auth/session'
-import { getCurrentPeriod } from '@/lib/data/aip'
+import { getLandingPeriod } from '@/lib/data/aip'
 import { getMonitoring, summarise } from '@/lib/data/execution'
 import { BudgetWorklist } from '@/components/execution/budget-worklist'
 import { moneyTotal } from '@/lib/format'
@@ -26,7 +27,13 @@ export default async function BudgetPage({
   // ?ppa=. Old links still work.
   if (ppa) redirect(routes.budgetPpa(ppa) as never)
 
-  const period = await getCurrentPeriod()
+  // The demo year while demo mode is on, otherwise the latest programme.
+  // /budget has no year picker, so without this the demo programme — the one
+  // thing on the system with allotments, OBRs and disbursements already on it —
+  // could not be reached from the screen that exists to work them. The year is
+  // badged DEMO beside the heading, because this screen is also where real
+  // money is recorded and a clerk has to see which programme they are in.
+  const period = await getLandingPeriod()
   if (!period) {
     return (
       <div className="rounded-lg border border-dashed border-border px-6 py-16 text-center">
@@ -41,7 +48,10 @@ export default async function BudgetPage({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Budget &amp; Obligations</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Budget &amp; Obligations</h1>
+          {period.is_demo ? <Badge variant="outline">DEMO</Badge> : null}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           CY {period.year} · allotments and obligations are recorded by the Budget Office,
           disbursements by Accounting.

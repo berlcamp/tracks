@@ -438,11 +438,16 @@ people and handed back to its starting state afterwards. Settings → Demo.
   `getCurrentPeriod()` takes the latest year, so a demo dated ahead of the real
   programme would become the year every screen opened on. It is badged `DEMO`
   in the year picker and on both document headers.
-- **The DASHBOARD opens on the demo year, and it is the only screen that
-  does.** `getLandingPeriod()` prefers a visible demo period over
+- **The DASHBOARD and `/budget` open on the demo year; nothing else does.**
+  `getLandingPeriod()` prefers a visible demo period over
   `getCurrentPeriod()`: the dashboard is the first screen anybody sees, and a
   demo whose landing page shows one real office and a blank execution curve
-  demonstrates nothing. `/aip` and `/consolidated` keep opening on the real
+  demonstrates nothing. `/budget` follows for the same reason — it has no year
+  picker either, and the demo year is the only programme on the system with
+  allotments, OBRs and disbursements already against it, so a worklist pinned
+  to the current year could never show the work it exists to show. It badges
+  the year `DEMO` beside its heading, because real money is recorded from that
+  screen. `/aip` and `/consolidated` keep opening on the real
   programme and reach the demo through the picker, because those are where the
   office does its work and a silent switch there would put somebody's encoding
   into a year nobody will ever print. The dashboard badges the year `DEMO` — it
@@ -540,7 +545,12 @@ type scale match.
   they never reached the worklist. `/monitoring` takes a document picker
   (`?fund=`) because a report is read as the programme it belongs to; `/budget`
   stays **one list across every document** with a fund column, because a clerk
-  wants every outstanding OBR in one place.
+  wants every outstanding OBR in one place. The worklist is **banded by
+  office**, each band closing with that office's subtotal over the rows on
+  screen and marked "(filtered rows only)" when a filter is on — the same rule
+  the AIP grid follows. Those are the execution columns, which no view totals
+  per office and which are never printed; each row's figures still come from
+  `v_ppa_financials` unchanged.
 - **Monitoring's fund tabs follow filed documents, not eligibility.** A
   department sees a tab for each fund *its own office has filed*
   (`listFiledFunds`), not the four that exist and not the ones it is merely
@@ -567,7 +577,7 @@ type scale match.
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 155 unit tests — exporter, template fidelity, grid, permissions, deck, history
+npm test             # 160 unit tests — exporter, template fidelity, grid, permissions, deck, history
 npm run test:db      # 272 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database

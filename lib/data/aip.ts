@@ -247,18 +247,20 @@ export async function getVisibleDemoPeriod(): Promise<AipPeriod | null> {
 }
 
 /**
- * The year the dashboard opens on.
+ * The year the dashboard and the Budget worklist open on.
  *
  * Normally the latest programme. While demo mode is on it is the demo year
  * instead — the dashboard is the first screen anybody sees, and a demo whose
  * landing page shows one real department and a blank execution curve is not a
  * demonstration of anything.
  *
- * This is the ONE screen that switches. `/aip` and `/consolidated` keep opening
- * on the real programme and offer the demo year through the picker, because
- * those are where the office does its work and a silent switch there would put
- * somebody's encoding into a year nobody will ever print. The dashboard is the
- * shop window; the working screens are not.
+ * These are the two screens that switch, and for the same reason: neither has
+ * a year picker, so the demo programme — the only one carrying allotments,
+ * OBRs and disbursements — is otherwise unreachable from the screen that exists
+ * to work them. Both badge the year DEMO. `/aip` and `/consolidated` keep
+ * opening on the real programme and offer the demo year through the picker,
+ * because those are where the office does its encoding and a silent switch
+ * there would put somebody's rows into a year nobody will ever print.
  *
  * Nothing here decides what is visible. `getVisibleDemoPeriod()` returns a row
  * only when `aip_periods_read` lets it through, which is only while demo mode
