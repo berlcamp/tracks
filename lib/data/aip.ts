@@ -245,3 +245,25 @@ export async function getVisibleDemoPeriod(): Promise<AipPeriod | null> {
     .maybeSingle<AipPeriod>()
   return data
 }
+
+/**
+ * The year the dashboard opens on.
+ *
+ * Normally the latest programme. While demo mode is on it is the demo year
+ * instead — the dashboard is the first screen anybody sees, and a demo whose
+ * landing page shows one real department and a blank execution curve is not a
+ * demonstration of anything.
+ *
+ * This is the ONE screen that switches. `/aip` and `/consolidated` keep opening
+ * on the real programme and offer the demo year through the picker, because
+ * those are where the office does its work and a silent switch there would put
+ * somebody's encoding into a year nobody will ever print. The dashboard is the
+ * shop window; the working screens are not.
+ *
+ * Nothing here decides what is visible. `getVisibleDemoPeriod()` returns a row
+ * only when `aip_periods_read` lets it through, which is only while demo mode
+ * is on.
+ */
+export async function getLandingPeriod(): Promise<AipPeriod | null> {
+  return (await getVisibleDemoPeriod()) ?? getCurrentPeriod()
+}

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireSession } from '@/lib/auth/session'
-import { getCurrentPeriod, listAips } from '@/lib/data/aip'
+import { getLandingPeriod, listAips } from '@/lib/data/aip'
 import { loadDeckRequest } from '@/lib/data/presentation'
 import { ReportPanel } from '@/components/reports/report-panel'
 import { AIP_STATUS_LABELS, PERIOD_STATUS_LABELS, isDepartmentUser, isPlanning } from '@/lib/auth/permissions'
@@ -14,7 +14,9 @@ import { cn } from '@/lib/utils'
 
 export default async function DashboardPage() {
   const session = await requireSession()
-  const period = await getCurrentPeriod()
+  // The demo year while demo mode is on, otherwise the latest programme. Only
+  // this screen switches — see getLandingPeriod().
+  const period = await getLandingPeriod()
 
   if (!period) {
     return (
@@ -63,7 +65,14 @@ export default async function DashboardPage() {
             Welcome back, {session.profile.full_name.split(' ')[0]}.
           </p>
         </div>
-        <Badge variant="secondary">{PERIOD_STATUS_LABELS[period.status]}</Badge>
+        <div className="flex items-center gap-2">
+          {/* The heading already carries "(DEMO)" from the period's own title,
+              but every other screen badges the year and this one states figures
+              before anything else on it. A reader should not have to parse a
+              title to know whether the money is real. */}
+          {period.is_demo ? <Badge variant="outline">DEMO</Badge> : null}
+          <Badge variant="secondary">{PERIOD_STATUS_LABELS[period.status]}</Badge>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -145,11 +154,19 @@ export default async function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
+            {/* Carrying the period keeps a demonstration inside the demo: these
+                screens open on the real programme by default, so a bare link
+                from a demo dashboard would land on CY 2027 with one office in
+                it. */}
             <Button asChild variant="outline">
-              <Link href={routes.aips as never}>Review submissions</Link>
+              <Link href={(period.is_demo ? routes.aipsFor(period.id) : routes.aips) as never}>
+                Review submissions
+              </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href={routes.consolidated as never}>
+              <Link href={(period.is_demo
+                ? routes.consolidatedFor(period.id)
+                : routes.consolidated) as never}>
                 <FileSpreadsheet className="size-4" /> Consolidated AIP
               </Link>
             </Button>

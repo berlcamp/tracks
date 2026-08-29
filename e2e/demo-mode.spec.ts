@@ -72,6 +72,41 @@ test.describe('demo mode', () => {
     await page.waitForURL(/\/aip\?period=/)
   })
 
+  // The dashboard is the first screen anybody sees. A demo whose landing page
+  // shows one real department and a blank execution curve demonstrates nothing,
+  // so this ONE screen opens on the demo year while the switch is on — and says
+  // so, because it states figures before anything else on it.
+  test('the dashboard opens on the demo year and says that it has', async ({ page }) => {
+    test.slow()
+    await signIn(page)
+    await page.goto('/dashboard')
+
+    await expect(page.getByRole('heading', { name: /\(DEMO\)/ })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('main').getByText('DEMO', { exact: true }).first())
+      .toBeVisible()
+
+    // Everything on the page is the same year, the reports panel included —
+    // read off the heading rather than hard-coded, since which year is free
+    // depends on the installation.
+    const heading = await page.getByRole('heading', { level: 1 }).innerText()
+    const year = heading.match(/CY (\d{4})/)?.[1]
+    expect(year).toBeTruthy()
+    await expect(page.getByRole('main')).toContainText(`for CY ${year}`)
+
+    // Its links stay inside the demo rather than dropping out to the real year.
+    // Asserted on the href rather than by navigating: the destination is
+    // already covered by the banner test, and what is actually in question here
+    // is whether the dashboard carries its period across. Scoped to main —
+    // the sidebar has a "Consolidated AIP" link too, and that one deliberately
+    // does not carry the period.
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Consolidated AIP' }),
+    ).toHaveAttribute('href', /period=/)
+    await expect(
+      page.getByRole('main').getByRole('link', { name: 'Review submissions' }),
+    ).toHaveAttribute('href', /period=/)
+  })
+
   test('the demo year carries a worked programme, not empty documents',
     async ({ page }) => {
     await signIn(page)

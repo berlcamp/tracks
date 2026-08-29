@@ -438,6 +438,18 @@ people and handed back to its starting state afterwards. Settings → Demo.
   `getCurrentPeriod()` takes the latest year, so a demo dated ahead of the real
   programme would become the year every screen opened on. It is badged `DEMO`
   in the year picker and on both document headers.
+- **The DASHBOARD opens on the demo year, and it is the only screen that
+  does.** `getLandingPeriod()` prefers a visible demo period over
+  `getCurrentPeriod()`: the dashboard is the first screen anybody sees, and a
+  demo whose landing page shows one real office and a blank execution curve
+  demonstrates nothing. `/aip` and `/consolidated` keep opening on the real
+  programme and reach the demo through the picker, because those are where the
+  office does its work and a silent switch there would put somebody's encoding
+  into a year nobody will ever print. The dashboard badges the year `DEMO` — it
+  states figures before anything else on it, and a reader should not have to
+  parse a title to know whether the money is real — and its Consolidation links
+  carry `?period=`, or a demonstration walks straight out of the demo on the
+  first click.
 - **Which is exactly why the banner exists.** The cost of dating the demo
   behind the real programme is that enabling it changes nothing on the screen
   you are already looking at — it reads as a switch that does not work, and did
@@ -559,7 +571,7 @@ npm test             # 155 unit tests — exporter, template fidelity, grid, per
 npm run test:db      # 272 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 53 Playwright tests against the local stack
+npm run test:e2e     # 54 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```
