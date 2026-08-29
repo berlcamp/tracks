@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
-import { RotateCcw, TriangleAlert } from 'lucide-react'
+import { ArrowRight, RotateCcw, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,8 +13,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { rebuildDemoData, setDemoMode } from '@/app/actions/demo'
+import { routes } from '@/lib/routes'
 
 export interface DemoStanding {
+  id: string
   year: number
   title: string
   /** Department documents in the demo year. */
@@ -66,6 +69,20 @@ export function DemoPanel({ enabled, standing }: {
               Turning it off hides the year everywhere. Nothing is deleted, and turning
               it back on brings it back exactly as you left it.
             </p>
+
+            {/* The demo year is dated BEHIND the real programme on purpose, so
+                it can never become the year every screen opens on. The cost is
+                that turning the switch on changes nothing on the screen you are
+                looking at — so the switch has to hand you the way in. */}
+            {enabled && standing ? (
+              <Link
+                href={routes.consolidatedFor(standing.id) as never}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium underline underline-offset-4"
+              >
+                Open the demo programme (CY {standing.year})
+                <ArrowRight className="size-3.5" />
+              </Link>
+            ) : null}
           </div>
 
           <Switch

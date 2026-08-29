@@ -554,6 +554,7 @@ begin
   return jsonb_build_object(
     'enabled', tracks.demo_mode_enabled(),
     'period', jsonb_build_object(
+      'id',    v_period.id,
       'year',  v_period.year,
       'title', v_period.title,
       'aipCount', (select count(*) from tracks.aips a where a.period_id = v_period.id),

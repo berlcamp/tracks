@@ -228,3 +228,20 @@ export async function getRowHistory(ppaId: string): Promise<PpaRevision[]> {
     .order('id', { ascending: false })
   return (data ?? []) as PpaRevision[]
 }
+
+/**
+ * The demo programme year, when there is one and it is being shown.
+ *
+ * Read through the RLS-bound client like everything else, which is what makes
+ * this the whole test: `aip_periods_read` hides a demo period while demo mode
+ * is off, so a row coming back here means demo mode is ON and this is the year
+ * it built. There is no second source of truth to disagree with.
+ */
+export async function getVisibleDemoPeriod(): Promise<AipPeriod | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('aip_periods').select('*').eq('is_demo', true)
+    .order('year', { ascending: false }).limit(1)
+    .maybeSingle<AipPeriod>()
+  return data
+}

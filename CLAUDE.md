@@ -438,6 +438,17 @@ people and handed back to its starting state afterwards. Settings → Demo.
   `getCurrentPeriod()` takes the latest year, so a demo dated ahead of the real
   programme would become the year every screen opened on. It is badged `DEMO`
   in the year picker and on both document headers.
+- **Which is exactly why the banner exists.** The cost of dating the demo
+  behind the real programme is that enabling it changes nothing on the screen
+  you are already looking at — it reads as a switch that does not work, and did
+  so the first time it was used. `DemoBanner` sits under the app header
+  whenever a demo period is *visible*, and the switch itself hands you a link
+  to the year. The banner's condition is one RLS-bound read, so it is both the
+  test and the answer: a demo period coming back at all means demo mode is on.
+  It is shown to everybody, not only whoever flipped it, which is the more
+  important half — anyone looking at TRACKS should be able to tell at a glance
+  that a pretend programme is in the picker. A department account is sent to
+  its own submissions, not to a consolidated programme it cannot reach.
 - **The period is `consolidating` with an LDC leg that came back**, not
   `for_ldc`. A demo has to stay editable — that is the point of the reset
   button — and paper comes back as well as goes out, so a returned Mayor's leg

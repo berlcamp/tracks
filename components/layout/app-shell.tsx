@@ -3,7 +3,10 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { Separator } from '@/components/ui/separator'
 import type { SessionContext } from '@/lib/auth/session'
 import { ROLE_LABELS } from '@/lib/auth/permissions'
+import { isDepartmentUser } from '@/lib/auth/permissions'
+import { getVisibleDemoPeriod } from '@/lib/data/aip'
 import { visibleNav } from '@/lib/nav'
+import { DemoBanner } from './demo-banner'
 import { AppSidebar } from './app-sidebar'
 import { SidebarUserMenu } from './sidebar-user-menu'
 import { ThemeToggle } from './theme-toggle'
@@ -24,6 +27,10 @@ export async function AppShell({
   // open on first paint. The cookie name is the one SidebarProvider writes.
   const store = await cookies()
   const defaultOpen = store.get('sidebar_state')?.value !== 'false'
+
+  // Null unless demo mode is on: `aip_periods_read` hides a demo period while
+  // the switch is off, so this one read is both the test and the answer.
+  const demoPeriod = await getVisibleDemoPeriod()
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -55,6 +62,12 @@ export async function AppShell({
             <ThemeToggle />
           </div>
         </header>
+        {demoPeriod ? (
+          <DemoBanner
+            period={demoPeriod}
+            isDepartmentUser={isDepartmentUser(session.role)}
+          />
+        ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>

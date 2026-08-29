@@ -5,6 +5,7 @@ export const routes = {
   noAccess: '/no-access',
   dashboard: '/dashboard',
   aips: '/aip',
+  aipsFor: (periodId: string) => `/aip?period=${periodId}` as const,
   aip: (id: string) => `/aip/${id}` as const,
   aipExport: (id: string) => `/api/aip/${id}/export` as const,
   consolidated: '/consolidated',
