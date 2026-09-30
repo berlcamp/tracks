@@ -43,8 +43,11 @@ export default async function SettingsPage() {
     supabase.from('sectors').select('*').order('sort_order'),
     supabase.from('departments').select('*').order('sort_order'),
     supabase.from('aip_periods').select('*').order('year', { ascending: false }),
+    // Named, because user_roles points at profiles twice (profile_id and
+    // created_by) and PostgREST refuses to guess which one "profiles" means.
     supabase.from('user_roles')
-      .select('id, role, status, department_id, profile:profiles(id, email, full_name)'),
+      .select('id, role, status, department_id, '
+        + 'profile:profiles!user_roles_profile_id_fkey(id, email, full_name)'),
     supabase.from('invites').select('*').order('created_at', { ascending: false }),
     listFundsWithDepartments(),
     // Read through an RPC rather than the tables: while demo mode is off the

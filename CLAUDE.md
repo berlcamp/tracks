@@ -157,9 +157,9 @@ execution ledger all apply unchanged.
   correctly.
 
 ## An encoder owns what they wrote
-A department can have several encoders — `user_roles.profile_id` is unique per
-PERSON, not per department. Each may edit and delete only the rows they
-authored; the **head may edit and delete any row in their own office**, because
+A department can have several encoders, and one person can hold several
+departments (see "One person, several offices"). Each may edit and delete only
+the rows they authored; the **head may edit and delete any row in their own office**, because
 they sign for the whole submission. City Planning is unchanged.
 
 Inserting is not editing: an encoder may still add a row above or below anyone
@@ -170,6 +170,52 @@ with **no author on record is open to any encoder of its department** — enforc
 strictly would have frozen every pre-existing row out of reach on the day
 `0014` was applied. `v_ppa_rows.author_name` drives the "Encoded by" column,
 which like the review column is on screen only and never printed.
+
+## One person, several offices
+
+A person may hold roles in more than one department — an encoder in the CMO and
+the head of the CHO — and works as **one office at a time**, chosen from the
+switcher at the top of the sidebar. The switcher only appears for someone with
+more than one office. `0020` did this without touching a single policy.
+
+- **A request acts as ONE membership.** `current_role_name()` and
+  `current_department_id()` still return one value each, so the submission
+  lock, the head's review, authorship and statutory eligibility all mean what
+  they meant before. Nothing unions a person's offices: working as the CHO,
+  the CMO's rows are locked to them exactly as they are to anybody else in the
+  CHO, and the role they hold in the CMO does not follow them there.
+- **The choice is a cookie, forwarded as the `x-tracks-department` header** by
+  the server Supabase client (`lib/supabase/server.ts`), and read in SQL from
+  `request.headers` by `tracks.current_membership_id()`. The header is a
+  *request*, not a grant: it is honoured only for an active office the person
+  holds an active membership in, and anything else — a forged header, an
+  office since deactivated, garbage — falls back to the person's **oldest**
+  membership. That fallback is also what psql, the SQL Editor, the browser
+  client and the storage API get. The cookie is not httpOnly because it is not
+  a secret.
+- **`getSessionContext()` asks the database which membership is current**
+  (`rpc('current_membership_id')`) rather than working it out again in
+  TypeScript, so the office the page says you are working as is the office
+  every policy on the page is judging you as.
+- **The choice is per browser, not per tab.** A tab left on the CMO after
+  switching to the CHO in another is refused by RLS when it saves.
+  `staleOfficeMessage()` turns that refusal into "Switch back to CMO" on the
+  PPA, review, submit and create-AIP actions. It runs only after a write has
+  already failed.
+- **Switching from a document goes to its section list** (`/aip/<id>` →
+  `/aip`), because the document belongs to the office being left.
+- **Office memberships or one city-wide role, never both.** A trigger refuses
+  the mix. City Planning already edits every office, and a Budget officer who
+  was also an encoder would be two capacities one request could not tell
+  apart. The partial unique indexes allow one city-wide role per person and one
+  role per person per office. NULLs do not collide, so a composite
+  `(profile_id, department_id)` index alone would have let someone hold budget
+  AND accounting.
+- **An invitation is claimed only on a FIRST sign-in**, so an office for an
+  existing person is added from Settings → Access ("Add office", or inviting
+  their address, which adds the office directly). `claim_invite()` still
+  *sets* capacity: a city-wide invitation deactivates office memberships and an
+  office invitation deactivates a city-wide role. Deactivated, not deleted.
 
 ## City Planning edits, and the trail says so
 
@@ -582,12 +628,12 @@ type scale match.
 ```
 npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
-npm run db:users     # create the local demo sign-ins (localhost only)
-npm test             # 163 unit tests — exporter, template fidelity, grid, permissions, deck, history
-npm run test:db      # 272 SQL tests against a throwaway Postgres.app database
+npm run db:users     # create the local demo sign-ins (localhost only), incl. a two-office one
+npm test             # 170 unit tests — exporter, template fidelity, grid, permissions, deck, history
+npm run test:db      # 291 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
-npm run test:e2e     # 54 Playwright tests against the local stack
+npm run test:e2e     # 62 Playwright tests against the local stack
 npm run dev          # localhost:3000
 npm run build
 ```

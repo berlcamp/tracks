@@ -36,6 +36,7 @@ export const DEV_ACCOUNTS: DevAccount[] = [
   { email: 'cmo.encoder@tracks.local', name: 'Elena Encoder',       role: 'Department Encoder',          scope: 'CMO' },
   { email: 'cmo.encoder2@tracks.local', name: 'Ramon Encoder',      role: 'Department Encoder',          scope: 'CMO' },
   { email: 'cho.head@tracks.local',    name: 'Helena Head',         role: 'Department Head',             scope: 'CHO' },
+  { email: 'two.offices@tracks.local', name: 'Olivia Offices',      role: 'Encoder · Department Head',   scope: 'CMO + CHO' },
 ]
 
 export const DEV_LOGIN_EMAIL = DEV_ACCOUNTS[0]!.email

@@ -321,7 +321,7 @@ on conflict (id) do nothing;
 insert into tracks.user_roles (profile_id, role, department_id)
 values ('a0000000-0000-0000-0000-000000000008', 'dept_encoder',
         'd0000000-0000-0000-0000-000000000001')
-on conflict (profile_id) do nothing;
+on conflict (profile_id, department_id) where department_id is not null do nothing;
 
 -- Back to a draft so the office can work on it.
 delete from tracks.ppa_reviews;

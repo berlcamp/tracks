@@ -67,5 +67,34 @@ SQL
   printf '  %-26s %-16s %s\n' "$email" "$role" "${dept/-/city-wide}"
 done <<< "$ACCOUNTS"
 
+# One person holding two offices: an encoder in the CMO and the head of the
+# CHO, switched between from the top of the sidebar. An invitation carries one
+# office, so this one is a pre-made unbound profile instead — the same path the
+# bootstrap administrator takes: claim_invite() binds it by address on first
+# sign-in.
+TWO_EMAIL="two.offices@tracks.local"
+TWO_NAME="Olivia Offices (CMO + CHO)"
+curl -s -X POST "$API/auth/v1/admin/users" \
+  -H "apikey: $SERVICE_ROLE" -H "Authorization: Bearer $SERVICE_ROLE" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$TWO_EMAIL\",\"password\":\"$PASSWORD\",\"email_confirm\":true,\"user_metadata\":{\"full_name\":\"$TWO_NAME\"}}" \
+  > /dev/null
+PGPASSWORD=postgres psql -h 127.0.0.1 -p "$DB_PORT" -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 -q -v email="$TWO_EMAIL" -v name="$TWO_NAME" <<'SQL'
+insert into tracks.profiles (email, full_name, global_role)
+values (:'email', :'name', 'user')
+on conflict (email) do nothing;
+
+insert into tracks.user_roles (profile_id, role, department_id, created_at)
+select p.id, m.role, d.id, now() + m.n * interval '1 second'
+from tracks.profiles p
+cross join (values ('dept_encoder', 'CMO', 0), ('dept_head', 'CHO', 1)) as m(role, code, n)
+join tracks.departments d on d.code = m.code
+where p.email = :'email'
+on conflict (profile_id, department_id) where department_id is not null do nothing;
+SQL
+printf '  %-26s %-16s %s\n' "$TWO_EMAIL" "dept_encoder" "CMO"
+printf '  %-26s %-16s %s\n' "" "dept_head" "CHO"
+
 echo
 echo "Sign in at http://localhost:3000/login — the Local development panel lists them."

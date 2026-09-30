@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
+import { staleOfficeMessage } from '@/lib/auth/stale-office'
 import { getRowHistory } from '@/lib/data/aip'
 import { ppaSchema, insertRowSchema } from '@/lib/validations/ppa'
 import { routes } from '@/lib/routes'
@@ -50,7 +51,10 @@ export async function createPpa(input: unknown): Promise<ActionResult<{ id: stri
       p_amount_co: isHeader ? 0 : parsed.amountCo,
     }).single<{ id: string }>()
 
-    if (error) throw new Error(friendly(error.message))
+    if (error) {
+      throw new Error(
+        (await staleOfficeMessage({ aipId: parsed.aipId })) ?? friendly(error.message))
+    }
 
     revalidatePath(routes.aip(parsed.aipId))
     return { ok: true, data: { id: data.id } }
@@ -88,7 +92,8 @@ export async function updatePpa(ppaId: string, input: unknown): Promise<ActionRe
     // RLS filters rather than raises: zero rows means the lock said no.
     if (!data || data.length === 0) {
       throw new Error(
-        'This item is locked. A submitted AIP can only be changed on the items City '
+        (await staleOfficeMessage({ aipId: parsed.aipId }))
+        ?? 'This item is locked. A submitted AIP can only be changed on the items City '
         + 'Planning returned.')
     }
 
@@ -115,7 +120,9 @@ export async function deletePpa(ppaId: string, aipId: string): Promise<ActionRes
     const { data, error } = await supabase.from('ppas').delete().eq('id', ppaId).select('id')
     if (error) throw new Error(friendly(error.message))
     if (!data || data.length === 0) {
-      throw new Error('This AIP is locked. Rows can only be removed while it is a draft.')
+      throw new Error(
+        (await staleOfficeMessage({ aipId }))
+        ?? 'This AIP is locked. Rows can only be removed while it is a draft.')
     }
 
     revalidatePath(routes.aip(aipId))

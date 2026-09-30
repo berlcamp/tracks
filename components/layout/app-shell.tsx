@@ -8,6 +8,7 @@ import { getVisibleDemoPeriod } from '@/lib/data/aip'
 import { visibleNav } from '@/lib/nav'
 import { DemoBanner } from './demo-banner'
 import { AppSidebar } from './app-sidebar'
+import { OfficeSwitcher } from './office-switcher'
 import { SidebarUserMenu } from './sidebar-user-menu'
 import { ThemeToggle } from './theme-toggle'
 
@@ -37,6 +38,17 @@ export async function AppShell({
       <AppSidebar
         sections={sections}
         subtitle={session.department?.code ?? 'City Planning Office'}
+        switcher={session.memberships.length > 1 ? (
+          <OfficeSwitcher
+            currentId={session.department?.id ?? null}
+            offices={session.memberships.map((m) => ({
+              departmentId: m.department.id,
+              code: m.department.code,
+              name: m.department.display_name,
+              roleLabel: ROLE_LABELS[m.role],
+            }))}
+          />
+        ) : undefined}
         footer={
           <SidebarUserMenu
             fullName={session.profile.full_name}

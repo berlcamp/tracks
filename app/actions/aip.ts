@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
+import { staleOfficeMessage } from '@/lib/auth/stale-office'
 import { routes } from '@/lib/routes'
 import { fail, type ActionResult } from './types'
 
@@ -19,7 +20,7 @@ export async function submitAip(aipId: string): Promise<ActionResult> {
     await requireSession()
     const supabase = await createClient()
     const { error } = await supabase.rpc('submit_aip', { p_aip_id: aipId })
-    if (error) throw new Error(error.message)
+    if (error) throw new Error((await staleOfficeMessage({ aipId })) ?? error.message)
     revalidatePath(routes.aip(aipId))
     revalidatePath(routes.aips)
     return { ok: true, data: undefined }
@@ -158,6 +159,8 @@ export async function createAip(input: unknown): Promise<ActionResult<{ id: stri
       .single()
 
     if (error) {
+      const stale = await staleOfficeMessage({ departmentId: parsed.departmentId })
+      if (stale) throw new Error(stale)
       if (error.message.includes('aips_one_annual_idx')) {
         throw new Error(parsed.fundId
           ? 'This department already has that statutory document for the year.'

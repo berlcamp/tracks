@@ -64,7 +64,7 @@ on conflict (email) do nothing;
 
 insert into tracks.user_roles (profile_id, role)
 select id, 'planning_admin' from tracks.profiles where email = 'berlcamp@gmail.com'
-on conflict (profile_id) do nothing;
+on conflict (profile_id) where department_id is null do nothing;
 
 insert into tracks.aip_periods (year, title, draft_label, nta_amount, status)
 values (2027, 'CY 2027 Annual Investment Program', '1st DRAFT', 2194073955.00, 'open')

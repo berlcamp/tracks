@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
+import { staleOfficeMessage } from '@/lib/auth/stale-office'
 import { routes } from '@/lib/routes'
 import { fail, type ActionResult } from './types'
 import { reviewSchema } from '@/lib/validations/review'
@@ -25,7 +26,9 @@ export async function reviewPpa(input: unknown): Promise<ActionResult> {
       p_decision: parsed.decision,
       p_remarks: parsed.remarks,
     })
-    if (error) throw new Error(error.message)
+    if (error) {
+      throw new Error((await staleOfficeMessage({ aipId: parsed.aipId })) ?? error.message)
+    }
 
     revalidatePath(routes.aip(parsed.aipId))
     return { ok: true, data: undefined }

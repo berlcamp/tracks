@@ -72,6 +72,7 @@ Creates one sign-in per role, all with the password `localdev12345`:
 | `cmo.head@tracks.local` | Department Head | CMO |
 | `cmo.encoder@tracks.local` | Department Encoder | CMO |
 | `cho.head@tracks.local` | Department Head | CHO |
+| `two.offices@tracks.local` | Encoder in the CMO, Department Head of the CHO | CMO + CHO — switched from the top of the sidebar |
 
 The **Local development** panel on `/login` lists them; clicking one fills the
 form. Two departments exist on purpose — signing in as CHO and trying to open

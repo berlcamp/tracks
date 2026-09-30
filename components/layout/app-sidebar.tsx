@@ -12,30 +12,34 @@ import { routes } from '@/lib/routes'
 import { NavIcon } from './nav-icon'
 
 export function AppSidebar({
-  sections, subtitle, footer,
+  sections, subtitle, footer, switcher,
 }: {
   sections: NavSection[]
   subtitle: string
   footer: React.ReactNode
+  /** Replaces the TRACKS mark for a person who holds more than one office. */
+  switcher?: React.ReactNode
 }) {
   const pathname = usePathname()
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg">
-              <Link href={routes.dashboard}>
-                <TracksMark className="size-6 shrink-0" />
-                <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate font-semibold">TRACKS</span>
-                  <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {switcher ?? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild size="lg">
+                <Link href={routes.dashboard}>
+                  <TracksMark className="size-6 shrink-0" />
+                  <div className="grid flex-1 text-left leading-tight">
+                    <span className="truncate font-semibold">TRACKS</span>
+                    <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
       </SidebarHeader>
 
       <SidebarContent>

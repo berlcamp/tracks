@@ -2,12 +2,25 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Department, Profile, UserRole } from '@/types/tracks'
 
+/** One office a person holds, and their role in it. */
+export interface Membership {
+  id: string
+  role: UserRole
+  department: Department
+}
+
 export interface SessionContext {
   profile: Profile
   isSuperAdmin: boolean
+  /** The role held in the office being worked as, or the city-wide role. */
   role: UserRole | null
-  /** The user's department, or null for a city-wide role. */
+  /** The office being worked as, or null for a city-wide role. */
   department: Department | null
+  /**
+   * Every office this person holds, the one being worked as included. Empty
+   * for a city-wide role. More than one is what shows the office switcher.
+   */
+  memberships: Membership[]
 }
 
 /**
@@ -28,18 +41,37 @@ export async function getSessionContext(): Promise<SessionContext | null> {
     .from('profiles').select('*').eq('auth_user_id', user.id).maybeSingle<Profile>()
   if (!profile) return null
 
-  const { data: roleRow } = await supabase
-    .from('user_roles')
-    .select('role, status, department:departments(*)')
-    .eq('profile_id', profile.id)
-    .eq('status', 'active')
-    .maybeSingle<{ role: UserRole; status: string; department: Department | null }>()
+  // A person may hold several offices and works as one of them per request.
+  // WHICH one is the database's answer, not a choice re-made here: asking
+  // `current_membership_id()` means the office this page says you are working
+  // as is the office every policy on the page is judging you as.
+  const [{ data: roleRows }, { data: currentId }] = await Promise.all([
+    supabase
+      .from('user_roles')
+      .select('id, role, department:departments(*)')
+      .eq('profile_id', profile.id)
+      .eq('status', 'active')
+      .order('created_at'),
+    supabase.rpc('current_membership_id'),
+  ])
+
+  const rows = (roleRows ?? []) as unknown as {
+    id: string
+    role: UserRole
+    department: Department | null
+  }[]
+  const current = rows.find((row) => row.id === currentId) ?? null
+  // An office that has been deactivated cannot be worked as, so it is not
+  // offered — the database would fall back past it anyway.
+  const memberships = rows
+    .filter((row): row is Membership => row.department !== null && row.department.active)
 
   return {
     profile,
     isSuperAdmin: profile.global_role === 'super_admin',
-    role: roleRow?.role ?? null,
-    department: roleRow?.department ?? null,
+    role: current?.role ?? null,
+    department: current?.department ?? null,
+    memberships,
   }
 }
 

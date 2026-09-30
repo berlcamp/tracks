@@ -300,7 +300,7 @@ select tracks_test.throws(
 
 select tracks_test.throws(
   format('insert into tracks.user_roles (profile_id, role, department_id)
-          values (%L, ''dept_head'', %L)',
-         'a0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000003'),
-  '21c. A user belongs to exactly one department');
+          values (%L, ''dept_encoder'', %L)',
+         'a0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001'),
+  '21c. A user holds one role per department — a head is not also an encoder of the same office');
 select tracks_test.logout();

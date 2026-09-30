@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, requireSession } from '@/lib/auth/session'
 import {
-  departmentSchema, inviteSchema, periodSchema, sectorSchema,
+  departmentSchema, inviteSchema, membershipSchema, periodSchema, sectorSchema,
 } from '@/lib/validations/settings'
 import { routes } from '@/lib/routes'
 import { fail, type ActionResult } from './types'
@@ -117,11 +117,38 @@ export async function setPeriodStatus(periodId: string, status: string): Promise
   }
 }
 
-export async function inviteUser(input: unknown): Promise<ActionResult> {
+/**
+ * Invite someone — or, when the address already belongs to somebody with
+ * access, give them the office directly. An invitation is only ever claimed on
+ * a FIRST sign-in (`claim_invite` returns early for a bound profile), so one
+ * addressed to an existing person would sit pending and never take effect.
+ */
+export async function inviteUser(
+  input: unknown,
+): Promise<ActionResult<{ added: boolean }>> {
   try {
     const session = await requireRole(['planning_admin'])
     const parsed = inviteSchema.parse(input)
     const supabase = await createClient()
+
+    const { data: existing } = await supabase
+      .from('profiles').select('id, auth_user_id').eq('email', parsed.email)
+      .maybeSingle<{ id: string; auth_user_id: string | null }>()
+
+    if (existing?.auth_user_id) {
+      if (!parsed.departmentId) {
+        throw new Error(
+          'That address already has access. A city-wide role is changed from the '
+          + 'Access table, not by inviting them again.')
+      }
+      await insertMembership(supabase, {
+        profileId: existing.id,
+        role: parsed.role as 'dept_encoder' | 'dept_head',
+        departmentId: parsed.departmentId,
+      }, session.profile.id)
+      revalidatePath(routes.settingsUsers)
+      return { ok: true, data: { added: true } }
+    }
 
     const { error } = await supabase.from('invites').insert({
       email: parsed.email,
@@ -133,10 +160,38 @@ export async function inviteUser(input: unknown): Promise<ActionResult> {
 
     if (error) throw new Error(friendly(error.message))
     revalidatePath(routes.settingsUsers)
+    return { ok: true, data: { added: false } }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Give somebody who already has access another office to work as. */
+export async function addMembership(input: unknown): Promise<ActionResult> {
+  try {
+    const session = await requireRole(['planning_admin'])
+    const parsed = membershipSchema.parse(input)
+    const supabase = await createClient()
+    await insertMembership(supabase, parsed, session.profile.id)
+    revalidatePath(routes.settingsUsers)
     return { ok: true, data: undefined }
   } catch (error) {
     return fail(error)
   }
+}
+
+async function insertMembership(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  membership: { profileId: string; role: 'dept_encoder' | 'dept_head'; departmentId: string },
+  createdBy: string,
+) {
+  const { error } = await supabase.from('user_roles').insert({
+    profile_id: membership.profileId,
+    role: membership.role,
+    department_id: membership.departmentId,
+    created_by: createdBy,
+  })
+  if (error) throw new Error(friendly(error.message))
 }
 
 export async function revokeInvite(inviteId: string): Promise<ActionResult> {
@@ -181,6 +236,16 @@ function friendly(message: string): string {
   }
   if (message.includes('user_roles_department_matches_role')) {
     return 'A department role needs a department; a city-wide role must not have one.'
+  }
+  if (message.includes('user_roles_one_per_department_idx')) {
+    return 'They already hold a role in that office. Reactivate it from the Access table.'
+  }
+  if (message.includes('user_roles_one_citywide_idx')) {
+    return 'They already hold a city-wide role.'
+  }
+  if (message.includes('user_roles_mixed_capacity')) {
+    return 'A person holds department roles or one city-wide role, not both. '
+      + 'Deactivate the other first.'
   }
   if (message.includes('row-level security')) {
     return 'Only the City Planning administrator can change this.'

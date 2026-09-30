@@ -58,6 +58,17 @@ export const inviteSchema = z
   )
 
 /**
+ * Another office for somebody who already has access. Only a department role:
+ * a person holds office memberships or one city-wide role, never both, and
+ * the database refuses the mix whichever screen asks.
+ */
+export const membershipSchema = z.object({
+  profileId: z.uuid(),
+  role: z.enum(['dept_encoder', 'dept_head']),
+  departmentId: z.uuid({ message: 'Choose a department' }),
+})
+
+/**
  * A statutory fund. `percentage` is the share of the year's base the programme
  * may not exceed — 20 for the 20% CDF, written the way the statute writes it
  * rather than as 0.20.

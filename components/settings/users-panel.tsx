@@ -16,7 +16,9 @@ import {
 } from '@/components/ui/table'
 import { Plus } from 'lucide-react'
 import { FormField } from './sectors-panel'
-import { inviteUser, revokeInvite, setUserStatus } from '@/app/actions/settings'
+import {
+  addMembership, inviteUser, revokeInvite, setUserStatus,
+} from '@/app/actions/settings'
 import { ROLE_LABELS } from '@/lib/auth/permissions'
 import type { Department, UserRole } from '@/types/tracks'
 
@@ -53,19 +55,28 @@ export function UsersPanel({ users, invites, departments }: {
   departments: Department[]
 }) {
   const [open, setOpen] = useState(false)
+  const [addingTo, setAddingTo] = useState<UserRow | null>(null)
   const [pending, startTransition] = useTransition()
   const departmentCode = (id: string | null) =>
     id ? departments.find((d) => d.id === id)?.code ?? '—' : '—'
 
   const pendingInvites = invites.filter((invite) => invite.status === 'pending')
 
+  // One row per office held, so a person with two offices is two rows. Sorted
+  // by name so those rows sit together.
+  const sortedUsers = [...users].sort((a, b) =>
+    (a.profile?.full_name ?? '').localeCompare(b.profile?.full_name ?? '')
+    || departmentCode(a.department_id).localeCompare(departmentCode(b.department_id)))
+
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-2xl text-sm text-muted-foreground">
-            People who have signed in and been bound to a role. Deactivating takes effect
-            on their very next request, not when their session expires.
+            People who have signed in and been bound to a role — one row for each office
+            they hold. Someone with several offices switches between them from the top of
+            the sidebar. Deactivating takes effect on their very next request, not when
+            their session expires.
           </p>
           <Button size="sm" onClick={() => setOpen(true)}>
             <Plus className="size-4" /> Invite someone
@@ -92,7 +103,7 @@ export function UsersPanel({ users, invites, departments }: {
                   </TableCell>
                 </TableRow>
               ) : null}
-              {users.map((user) => (
+              {sortedUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.profile?.full_name ?? '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{user.profile?.email ?? '—'}</TableCell>
@@ -103,7 +114,15 @@ export function UsersPanel({ users, invites, departments }: {
                       {user.status === 'active' ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    {user.department_id && user.status === 'active' && user.profile ? (
+                      <Button
+                        size="sm" variant="ghost" disabled={pending}
+                        onClick={() => setAddingTo(user)}
+                      >
+                        Add office
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm" variant="ghost" disabled={pending}
                       onClick={() =>
@@ -176,6 +195,14 @@ export function UsersPanel({ users, invites, departments }: {
       </section>
 
       <InviteDialog departments={departments} open={open} onOpenChange={setOpen} />
+      <AddOfficeDialog
+        user={addingTo}
+        held={users
+          .filter((u) => u.profile?.id === addingTo?.profile?.id && u.department_id)
+          .map((u) => u.department_id as string)}
+        departments={departments}
+        onClose={() => setAddingTo(null)}
+      />
     </div>
   )
 }
@@ -218,7 +245,9 @@ function InviteDialog({ departments, open, onOpenChange }: {
                   : '',
               })
               if (!result.ok) { setError(result.error); return }
-              toast.success('Invitation created.')
+              toast.success(result.data.added
+                ? 'They already had access — the office has been added to theirs.'
+                : 'Invitation created.')
               onOpenChange(false)
             })
           }}
@@ -228,9 +257,9 @@ function InviteDialog({ departments, open, onOpenChange }: {
           <FormField label="Full name" name="fullName" required />
 
           <div className="grid gap-2">
-            <Label>Role</Label>
+            <Label htmlFor="invite-role">Role</Label>
             <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="invite-role"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ROLES.map((r) => (
                   <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
@@ -241,9 +270,11 @@ function InviteDialog({ departments, open, onOpenChange }: {
 
           {needsDepartment ? (
             <div className="grid gap-2">
-              <Label>Department</Label>
+              <Label htmlFor="invite-department">Department</Label>
               <Select value={departmentId} onValueChange={setDepartmentId}>
-                <SelectTrigger><SelectValue placeholder="Choose a department" /></SelectTrigger>
+                <SelectTrigger id="invite-department">
+                  <SelectValue placeholder="Choose a department" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_DEPARTMENT}>Choose a department</SelectItem>
                   {departments.filter((d) => d.active).map((department) => (
@@ -254,7 +285,8 @@ function InviteDialog({ departments, open, onOpenChange }: {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                A person belongs to exactly one department.
+                If this address already has access, the office is added to the ones they
+                hold rather than replacing them.
               </p>
             </div>
           ) : (
@@ -274,6 +306,109 @@ function InviteDialog({ departments, open, onOpenChange }: {
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>{pending ? 'Inviting…' : 'Send invitation'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Another office for somebody who already has access. Only department roles
+ * are offered: a person holds office memberships or one city-wide role, and
+ * the database refuses the mix.
+ */
+function AddOfficeDialog({ user, held, departments, onClose }: {
+  user: UserRow | null
+  held: string[]
+  departments: Department[]
+  onClose: () => void
+}) {
+  const [role, setRole] = useState<UserRole>('dept_encoder')
+  const [departmentId, setDepartmentId] = useState<string>(NO_DEPARTMENT)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  const available = departments.filter((d) => d.active && !held.includes(d.id))
+
+  return (
+    <Dialog
+      open={user !== null}
+      onOpenChange={(next) => {
+        if (next) return
+        setError(null)
+        setDepartmentId(NO_DEPARTMENT)
+        onClose()
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add an office</DialogTitle>
+          <DialogDescription>
+            {user?.profile?.full_name} keeps the offices they hold and can switch to this
+            one from the top of the sidebar.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!user?.profile) return
+            setError(null)
+            startTransition(async () => {
+              const result = await addMembership({
+                profileId: user.profile!.id,
+                role,
+                departmentId: departmentId === NO_DEPARTMENT ? '' : departmentId,
+              })
+              if (!result.ok) { setError(result.error); return }
+              toast.success('Office added.')
+              setDepartmentId(NO_DEPARTMENT)
+              onClose()
+            })
+          }}
+        >
+          <div className="grid gap-2">
+            <Label htmlFor="add-office-department">Department</Label>
+            <Select value={departmentId} onValueChange={setDepartmentId}>
+              <SelectTrigger id="add-office-department">
+                <SelectValue placeholder="Choose a department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_DEPARTMENT}>Choose a department</SelectItem>
+                {available.map((department) => (
+                  <SelectItem key={department.id} value={department.id}>
+                    {department.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="add-office-role">Role in that office</Label>
+            <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
+              <SelectTrigger id="add-office-role"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {DEPARTMENT_ROLES.map((r) => (
+                  <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {error ? (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={pending || departmentId === NO_DEPARTMENT}>
+              {pending ? 'Adding…' : 'Add office'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
