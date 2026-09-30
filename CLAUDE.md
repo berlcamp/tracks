@@ -217,6 +217,28 @@ more than one office. `0020` did this without touching a single policy.
   *sets* capacity: a city-wide invitation deactivates office memberships and an
   office invitation deactivates a city-wide role. Deactivated, not deleted.
 
+## Access administration, and emptying the programme
+
+- **Settings → Access edits a row, not a person.** Edit changes the role and
+  office one `user_roles` row grants, so someone with two offices keeps the
+  other untouched; the mixed-capacity trigger still refuses a city-wide role
+  beside an active office. An administrator gets no Edit on their own rows —
+  demoting yourself mid-request locks you out of the page you are on.
+- **An invitation may be revoked (kept on record) or deleted (removed).**
+- **An invitation to somebody already signed in is `superseded`.**
+  `claim_invite()` returns at step 1 for a bound profile, so such an
+  invitation could never be claimed and sat "pending" in Settings forever.
+  `0021` retired the stranded ones and `claim_invite()` now supersedes any
+  pending invitation for a bound address on every sign-in.
+- **`delete_programme_data('DELETE')` is the super administrator's alone**
+  (`global_role = 'super_admin'`, not `planning_admin`), from Settings → Data
+  behind a type-DELETE confirmation. It deletes every department document in
+  every period, demo included, and everything hanging off them, and sets every
+  period back to `open`. It keeps sectors, departments, statutory funds,
+  periods and access — and never `audit_logs` or `ppa_revisions`, which nobody
+  may delete; it writes `DATA_DELETED` to the audit log. Uploaded council
+  documents in storage are left where they are.
+
 ## City Planning edits, and the trail says so
 
 City Planning has always been able to correct any office's row — `can_edit_ppa`
@@ -630,7 +652,7 @@ npm run db:start     # local Supabase on 548xx
 npm run db:reset     # wipe local DB, re-apply migrations + seed
 npm run db:users     # create the local demo sign-ins (localhost only), incl. a two-office one
 npm test             # 170 unit tests — exporter, template fidelity, grid, permissions, deck, history
-npm run test:db      # 291 SQL tests against a throwaway Postgres.app database
+npm run test:db      # 308 SQL tests against a throwaway Postgres.app database
 npm run typecheck
 npm run export:demo  # build a real .xlsx from the local database
 npm run test:e2e     # 62 Playwright tests against the local stack

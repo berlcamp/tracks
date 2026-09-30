@@ -7,6 +7,7 @@ import { PeriodsPanel } from '@/components/settings/periods-panel'
 import { UsersPanel } from '@/components/settings/users-panel'
 import { StatutoryFundsPanel } from '@/components/settings/statutory-funds-panel'
 import { DemoPanel, type DemoStanding } from '@/components/settings/demo-panel'
+import { DeleteDataPanel } from '@/components/settings/delete-data-panel'
 import { listFundsWithDepartments } from '@/lib/data/statutory'
 import type { AipPeriod, Department, Sector, UserRole } from '@/types/tracks'
 
@@ -36,7 +37,7 @@ interface DemoState {
 }
 
 export default async function SettingsPage() {
-  await requireRole(['planning_admin'])
+  const session = await requireRole(['planning_admin'])
   const supabase = await createClient()
 
   const [sectors, departments, periods, users, invites, funds, demo] = await Promise.all([
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
           <TabsTrigger value="periods">AIP periods</TabsTrigger>
           <TabsTrigger value="users">Access</TabsTrigger>
           <TabsTrigger value="demo">Demo</TabsTrigger>
+          {session.isSuperAdmin ? <TabsTrigger value="data">Data</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="sectors" className="mt-5">
@@ -102,11 +104,17 @@ export default async function SettingsPage() {
             users={(users.data ?? []) as unknown as UserRow[]}
             invites={(invites.data ?? []) as InviteRow[]}
             departments={(departments.data ?? []) as Department[]}
+            selfProfileId={session.profile.id}
           />
         </TabsContent>
         <TabsContent value="demo" className="mt-5">
           <DemoPanel enabled={demoState.enabled} standing={demoState.period} />
         </TabsContent>
+        {session.isSuperAdmin ? (
+          <TabsContent value="data" className="mt-5">
+            <DeleteDataPanel />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   )

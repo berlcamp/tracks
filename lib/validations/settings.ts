@@ -58,6 +58,29 @@ export const inviteSchema = z
   )
 
 /**
+ * Changing what one of somebody's rows in the Access table grants — the role,
+ * and the office when it is a department role. The same pairing rule as an
+ * invitation, and the database enforces it again whichever screen asks.
+ */
+export const roleAssignmentSchema = z
+  .object({
+    roleId: z.uuid(),
+    role: z.enum([
+      'dept_encoder', 'dept_head', 'planning_staff', 'planning_admin',
+      'budget', 'accounting', 'viewer',
+    ]),
+    departmentId: z.union([z.uuid(), z.literal('')]).optional()
+      .transform((v) => (v ? v : null)),
+  })
+  .refine(
+    (v) => (['dept_encoder', 'dept_head'].includes(v.role) ? v.departmentId !== null : true),
+    { message: 'A department role needs a department', path: ['departmentId'] },
+  )
+  .transform((v) => (['dept_encoder', 'dept_head'].includes(v.role)
+    ? v
+    : { ...v, departmentId: null }))
+
+/**
  * Another office for somebody who already has access. Only a department role:
  * a person holds office memberships or one city-wide role, never both, and
  * the database refuses the mix whichever screen asks.

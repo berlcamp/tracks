@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, requireSession } from '@/lib/auth/session'
 import {
-  departmentSchema, inviteSchema, membershipSchema, periodSchema, sectorSchema,
+  departmentSchema, inviteSchema, membershipSchema, periodSchema, roleAssignmentSchema,
+  sectorSchema,
 } from '@/lib/validations/settings'
 import { routes } from '@/lib/routes'
 import { fail, type ActionResult } from './types'
@@ -203,6 +204,90 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
     if (error) throw new Error(friendly(error.message))
     revalidatePath(routes.settingsUsers)
     return { ok: true, data: undefined }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/**
+ * Deleting an invitation removes it outright, where revoking keeps it on
+ * record as revoked. Either way the address can no longer claim it.
+ */
+export async function deleteInvite(inviteId: string): Promise<ActionResult> {
+  try {
+    await requireRole(['planning_admin'])
+    const supabase = await createClient()
+    const { error } = await supabase.from('invites').delete().eq('id', inviteId)
+    if (error) throw new Error(friendly(error.message))
+    revalidatePath(routes.settingsUsers)
+    return { ok: true, data: undefined }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/**
+ * Change the role, or the office, one row of the Access table grants. It is
+ * the membership that changes, not the person, so somebody with two offices
+ * keeps the other one exactly as it was.
+ *
+ * An administrator cannot edit their own row here: demoting yourself out of
+ * planning_admin mid-request would lock you out of the page you are on.
+ */
+export async function updateRoleAssignment(input: unknown): Promise<ActionResult> {
+  try {
+    const session = await requireRole(['planning_admin'])
+    const parsed = roleAssignmentSchema.parse(input)
+    const supabase = await createClient()
+
+    const { data: row } = await supabase
+      .from('user_roles').select('profile_id').eq('id', parsed.roleId)
+      .maybeSingle<{ profile_id: string }>()
+    if (!row) throw new Error('That access row no longer exists.')
+    if (row.profile_id === session.profile.id) {
+      throw new Error('You cannot change your own role. Ask another administrator.')
+    }
+
+    const { data, error } = await supabase
+      .from('user_roles')
+      .update({ role: parsed.role, department_id: parsed.departmentId })
+      .eq('id', parsed.roleId)
+      .select('id')
+    if (error) throw new Error(friendly(error.message))
+    if (!data?.length) throw new Error('Only the City Planning administrator can change this.')
+
+    revalidatePath(routes.settingsUsers)
+    return { ok: true, data: undefined }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/**
+ * Empty the programme: every department document in every period, and
+ * everything recorded against them. Sectors, departments, statutory funds,
+ * periods and access are kept. Super administrator only, and the database
+ * checks both that and the typed word again — this is a convenience check.
+ */
+export async function deleteProgrammeData(
+  confirm: string,
+): Promise<ActionResult<{ aips: number; ppas: number }>> {
+  try {
+    const session = await requireSession()
+    if (!session.isSuperAdmin) {
+      throw new Error('Only the super administrator can delete the programme data.')
+    }
+    if (confirm !== 'DELETE') throw new Error('Type DELETE to confirm.')
+    const supabase = await createClient()
+
+    const { data, error } = await supabase.rpc('delete_programme_data', {
+      p_confirm: confirm,
+    })
+    if (error) throw new Error(error.message)
+
+    revalidatePath('/', 'layout')
+    const counts = (data ?? {}) as { aips?: number; ppas?: number }
+    return { ok: true, data: { aips: counts.aips ?? 0, ppas: counts.ppas ?? 0 } }
   } catch (error) {
     return fail(error)
   }
